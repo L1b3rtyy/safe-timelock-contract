@@ -1,0 +1,9 @@
+Timelock
+- Queued transactions
+    Higher quorum required for the actions "Execute" and "Cancel"
+- Executed transtactions, with signers
+- Cancelled transactions, with signers
+
+Pay gas with Safe balance
+
+Hide signers and balances use Zero Knowledge

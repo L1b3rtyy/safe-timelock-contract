@@ -1,15 +1,13 @@
+//@ts-check
 const { ethers } = require("hardhat");
+const argumentsArray = require('./arguments.js');
 
 async function main() {
+  const [SafeAdd, timelockDuration, throttle, limitNoTimelock] = argumentsArray;
   const [deployer] = await ethers.getSigners();
 
-  const SafeAddress = "0xA558BF16a22065F33136E9FcdB500bd4A17eca8E";
-  const timelockDuration = 86400; // 24 hours
-  const cancelQuorum = 5;
-
-  // Pass deployer explicitly to deploy from correct wallet
-  const Module = await ethers.getContractFactory("TimelockModule", deployer);
-  const module = await Module.deploy(SafeAddress, timelockDuration, cancelQuorum);
+  const Module = await ethers.getContractFactory("TimelockGuard", deployer);
+  const module = await Module.deploy(SafeAdd, timelockDuration, throttle, limitNoTimelock);
   await module.deployed();
 
   console.log("Timelock Module deployed at:", module.address);

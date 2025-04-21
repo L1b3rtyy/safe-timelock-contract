@@ -60,8 +60,10 @@ contract TimelockGuard is BaseGuard {
         setConfigHelper(_timelockDuration, _throttle, _limitNoTimelock);
         uint256 len = clearHashes.length;
         if(len != 0) {
-            for(uint256 i = 0; i < len; i++)
-                delete transactions[clearHashes[i]];
+            unchecked {
+                for(uint256 i = 0; i < len; ++i)
+                    delete transactions[clearHashes[i]];
+            }
             emit TransactionsCleared(clearHashes);
         }
 
@@ -116,17 +118,17 @@ contract TimelockGuard is BaseGuard {
                 return;
             }
             if(i==0)    break;
-            else        { unchecked { --i; } }
+            unchecked { --i; }
         }
         revert CancelMisMatch(txHash, timestamp);        
     }
     function shiftAndPop(uint256[] storage arr, uint256 pos) private {
-        uint256 max = arr.length-1;
-        for(uint256 i = pos; i < max;) {
-            arr[i] = arr[i+1];
-            unchecked { ++i; }
+        unchecked {
+            uint256 max = arr.length-1;
+            for(uint256 i = pos; i < max; ++i)
+                arr[i] = arr[i+1];
+            arr.pop();
         }
-        arr.pop();
     }
 
     function validateAndMarkExecuted (address to, uint256 value, bytes calldata data, Enum.Operation operation) private {
@@ -149,8 +151,10 @@ contract TimelockGuard is BaseGuard {
                 delete transactions[txHash];
             else {
                 uint256 i = 1;
-                while(i < len && block.timestamp > executesAfter[i])
-                    i++;
+                unchecked {
+                    while(i < len && block.timestamp > executesAfter[i])
+                        ++i;
+                }
                 shiftAndPop(executesAfter, i-1);
             }
             emit TransactionExecuted(txHash);

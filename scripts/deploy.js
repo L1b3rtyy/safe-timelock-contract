@@ -10,7 +10,7 @@ async function main() {
   const module = await Module.deploy(SafeAdd, timelockDuration, throttle, limitNoTimelock);
   await module.deployed();
 
-  console.log("Timelock Module deployed at:", module.address);
+  console.log("Guard deployed at:", module.address);
   console.log("Deployed by account:", deployer.address);
 }
 

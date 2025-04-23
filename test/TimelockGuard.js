@@ -1,5 +1,5 @@
-import { expect, assert } from "chai";
-import { time } from "@nomicfoundation/hardhat-network-helpers";
+const { expect, assert } = require("chai");
+const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 const toRoot = "0x000000000000000000000000000000000000000";
 const toAdd = [toRoot + 2, toRoot + 3, toRoot + 4, toRoot + 5]

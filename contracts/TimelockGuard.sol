@@ -6,33 +6,32 @@ import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 contract TimelockGuard is BaseGuard {
 
     error UnAuthorized(address caller);
-    error InvalidAddess(address _safe);
-    error InvalidConfig(uint64 _timelockDuration, uint64 _throttle);
+    error ZerodAddess();
+    error InvalidConfig(uint64 timelockDuration, uint64 throttle);
     error Throttled(uint256 timestamp, uint256 lastQueueTime, uint64 throttle);
     error QueuingNeeded(bytes32 txHash);
     error QueuingNotNeeded(uint64 timelockDuration, uint128 limitNoTimelock, uint256 value);
-    error TimeLockActive(bytes32 txHash, uint256 timestamp, uint256 executeAfter);
-    error CancelMisMatch(bytes32 txHash, uint256 timestamp); 
+    error TimeLockActive(bytes32 txHash);
+    error CancelMisMatch(bytes32 txHash); 
     function checkSender() private view {
         if(msg.sender != address(safe)) revert UnAuthorized(msg.sender);
     }
 
-    constructor(address _safe, uint64 _timelockDuration, uint64 _throttle, uint128 _limitNoTimelock) {
-        if(address(_safe) == address(0)) revert InvalidAddess(address(_safe));
-        setConfigHelper(_timelockDuration, _throttle, _limitNoTimelock);
+    constructor(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock) {
+        if(address(_safe) == address(0)) revert ZerodAddess();
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock);
         safe = _safe;
     }
 
     function checkTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, address executor ) external {
         checkSender();
-
         // allow skipping the queue for queueTransaction or cancelTransaction
         if (to == address(this) && data.length > 3) {
             bytes4 selector = bytes4(data);
             if (selector == this.queueTransaction.selector || selector == this.cancelTransaction.selector)
                 return;
         }
-
+        // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
 
@@ -48,16 +47,16 @@ contract TimelockGuard is BaseGuard {
     }
     TimelockConfig public timelockConfig;
     uint256 private lastQueueTime = 1;
-    event TimelockConfigChanged(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock);
+    event TimelockConfigChanged();  // Empty event to save on gas as we dont need the history. Check the field of timelockConfig for the new values
 
     /// Set the configuration for this timelock and allow clearings caches that may have become irrelevant due to the new configuration (this is not verified in the contract) 
-    /// @param _timelockDuration    Duration of timelock, 0 disables the timelock, transactions can be executed directly
-    /// @param _throttle            Throttle time, 0 disables the throttling
-    /// @param _limitNoTimelock     Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
-    /// @param clearHashes          Transaction hashes for which to clear the timelock
-    function setConfig (uint64 _timelockDuration, uint64 _throttle, uint128 _limitNoTimelock, bytes32[] calldata clearHashes) external {
+    /// @param timelockDuration    Duration of timelock, 0 disables the timelock, transactions can be executed directly
+    /// @param throttle            Throttle time, 0 disables the throttling
+    /// @param limitNoTimelock     Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
+    /// @param clearHashes          Transaction hashes for which to clear the timelock. Relevant when the config has been changed so no timelock is need for these hashes 
+    function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, bytes32[] calldata clearHashes) external {
         checkSender();
-        setConfigHelper(_timelockDuration, _throttle, _limitNoTimelock);
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock);
         uint256 len = clearHashes.length;
         if(len != 0) {
             unchecked {
@@ -66,22 +65,21 @@ contract TimelockGuard is BaseGuard {
             }
             emit TransactionsCleared(clearHashes);
         }
-
-        emit TimelockConfigChanged(_timelockDuration, _throttle, _limitNoTimelock);
+        emit TimelockConfigChanged();
     }
-    function setConfigHelper(uint64 _timelockDuration, uint64 _throttle, uint128 _limitNoTimelock) private {
-        if(_timelockDuration > 1209600 || _throttle > 3600) revert InvalidConfig(_timelockDuration, _throttle);
-        timelockConfig.timelockDuration = _timelockDuration;
-        timelockConfig.throttle = _throttle;
-        timelockConfig.limitNoTimelock = _limitNoTimelock;
+    function setConfigHelper(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock) private {
+        if(timelockDuration > 1209600 || throttle > 3600) revert InvalidConfig(timelockDuration, throttle);
+        timelockConfig.timelockDuration = timelockDuration;
+        timelockConfig.throttle = throttle;
+        timelockConfig.limitNoTimelock = limitNoTimelock;
     }
     
-    /// @notice Mapping of transaction hashes to timestamp after which these transaction can be executed
+    /// @notice Mapping of transaction hashes to timestamp when the transactions have been queued.
     /// @notice Using an array allow for several identical transactions to be in the queue at the same time. Timestamp are always in ascending order, and the most recent are cleared first.
     mapping(bytes32 => uint256[]) public transactions;
     
-    event TransactionQueued(bytes32 txHash);
-    event TransactionCanceled(bytes32 txHash, uint256 timestamp, bytes data, address to, uint256 value, Enum.Operation operation); // Full data is emitted, future optimization would be to store the data off-chain at queue time instead
+    event TransactionQueued(bytes32 txHash, uint256 timestamp, bytes data, address to, uint256 value, Enum.Operation operation); // Full data is emitted, future optimization would be to store the data off-chain at queue time instead
+    event TransactionCanceled(bytes32 txHash);
     event TransactionCleared(bytes32 txHash);
     event TransactionsCleared(bytes32[] txHash);
     event TransactionExecuted(bytes32 txHash);
@@ -93,34 +91,34 @@ contract TimelockGuard is BaseGuard {
         bytes32 txHash = getTxHash(to, value, data, operation);
 
         lastQueueTime = block.timestamp;
-        transactions[txHash].push(block.timestamp + timelockConfig.timelockDuration);
-        emit TransactionQueued(txHash);
+        transactions[txHash].push(block.timestamp);
+        emit TransactionQueued(txHash, block.timestamp, data, to, value, operation);
     }
 
     function cancelTransaction(bytes32 txHash, address to, uint256 value, bytes calldata data, Enum.Operation operation, uint256 timestampPos, uint256 timestamp) external {
         checkSender();
-        uint256[] storage executesAfter = transactions[txHash];
-        uint256 len = executesAfter.length;
-        if(timestampPos >= len) revert CancelMisMatch(txHash, timestamp);
+        uint256[] storage timestamps = transactions[txHash];
+        uint256 len = timestamps.length;
+        if(timestampPos >= len) revert CancelMisMatch(txHash);
 
-        if(executesAfter[timestampPos] == timestamp) {
+        if(timestamps[timestampPos] == timestamp) {
             if(len == 1)
                 delete transactions[txHash];
             else
-                shiftAndPop(executesAfter, timestampPos);
-            emit TransactionCanceled(txHash, timestamp, data, to, value, operation);
+                shiftAndPop(timestamps, timestampPos);
+            emit TransactionCanceled(txHash);
             return;
         }
-        for(uint256 i = timestampPos-1; executesAfter[i]>=timestamp; ) {
-            if(timestamp == executesAfter[i]) {
-                shiftAndPop(executesAfter, i);
-                emit TransactionCanceled(txHash, timestamp, data, to, value, operation);
+        for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
+            if(timestamp == timestamps[i]) {
+                shiftAndPop(timestamps, i);
+                emit TransactionCanceled(txHash);
                 return;
             }
             if(i==0)    break;
             unchecked { --i; }
         }
-        revert CancelMisMatch(txHash, timestamp);        
+        revert CancelMisMatch(txHash);        
     }
     function shiftAndPop(uint256[] storage arr, uint256 pos) private {
         unchecked {
@@ -141,27 +139,28 @@ contract TimelockGuard is BaseGuard {
             }
         }
         else {
-            uint256[] storage executesAfter = transactions[txHash];
-            uint256 len = executesAfter.length;
+            uint256[] storage timestamps = transactions[txHash];
+            uint256 len = timestamps.length;
             if(len == 0) revert QueuingNeeded(txHash);
-            if(block.timestamp < executesAfter[0]) revert TimeLockActive(txHash, block.timestamp, executesAfter[0]);
+            uint256 executeFrom = block.timestamp - timelockConfig.timelockDuration;
+            if(executeFrom < timestamps[0]) revert TimeLockActive(txHash);
             
-            // We clear the executeAfter value
+            // We clear the corresponding value
             if(len == 1)
                 delete transactions[txHash];
             else {
                 uint256 i = 1;
                 unchecked {
-                    while(i < len && block.timestamp > executesAfter[i])
+                    while(i < len && executeFrom > timestamps[i])
                         ++i;
                 }
-                shiftAndPop(executesAfter, i-1);
+                shiftAndPop(timestamps, i-1);
             }
             emit TransactionExecuted(txHash);
         }
     }
     function noTimelockNeeded( uint256 value, bytes calldata data, Enum.Operation operation) private view returns (bool) {
-        // We want simple ETH transfers smaller than limitNoTimelock to not require a timelock\
+        // We want simple ETH transfers smaller than limitNoTimelock to not require a timelock
         return timelockConfig.timelockDuration == 0 || (operation == Enum.Operation.Call && (data.length == 0 || (data.length == 1 && data[0] == 0)) && timelockConfig.limitNoTimelock >= value);
     }
     function getTxHash(address to, uint256 value, bytes calldata data, Enum.Operation operation) private pure returns (bytes32) {

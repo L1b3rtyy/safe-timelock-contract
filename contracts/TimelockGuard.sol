@@ -78,11 +78,11 @@ contract TimelockGuard is BaseGuard {
     /// @notice Using an array allow for several identical transactions to be in the queue at the same time. Timestamp are always in ascending order, and the most recent are cleared first.
     mapping(bytes32 => uint256[]) public transactions;
     
-    event TransactionQueued(bytes32 txHash, uint256 timestamp, bytes data, address to, uint256 value, Enum.Operation operation); // Full data is emitted, future optimization would be to store the data off-chain at queue time instead
-    event TransactionCanceled(bytes32 txHash);
+    event TransactionQueued(bytes32 txHash, bytes data, address to, uint256 value, Enum.Operation operation); // Full data is emitted, future optimization would be to store the data off-chain at queue time instead
+    event TransactionCanceled(bytes32 txHash, uint256 timestamp);
     event TransactionCleared(bytes32 txHash);
     event TransactionsCleared(bytes32[] txHash);
-    event TransactionExecuted(bytes32 txHash);
+    event TransactionExecuted(bytes32 txHash, uint256 timestamp);
 
     function queueTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation) external {
         checkSender();
@@ -92,10 +92,10 @@ contract TimelockGuard is BaseGuard {
 
         lastQueueTime = block.timestamp;
         transactions[txHash].push(block.timestamp);
-        emit TransactionQueued(txHash, block.timestamp, data, to, value, operation);
+        emit TransactionQueued(txHash, data, to, value, operation);
     }
 
-    function cancelTransaction(bytes32 txHash, address to, uint256 value, bytes calldata data, Enum.Operation operation, uint256 timestampPos, uint256 timestamp) external {
+    function cancelTransaction(bytes32 txHash, uint256 timestampPos, uint256 timestamp) external {
         checkSender();
         uint256[] storage timestamps = transactions[txHash];
         uint256 len = timestamps.length;
@@ -106,13 +106,13 @@ contract TimelockGuard is BaseGuard {
                 delete transactions[txHash];
             else
                 shiftAndPop(timestamps, timestampPos);
-            emit TransactionCanceled(txHash);
+            emit TransactionCanceled(txHash, timestamp);
             return;
         }
         for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
             if(timestamp == timestamps[i]) {
                 shiftAndPop(timestamps, i);
-                emit TransactionCanceled(txHash);
+                emit TransactionCanceled(txHash, timestamp);
                 return;
             }
             if(i==0)    break;
@@ -146,17 +146,19 @@ contract TimelockGuard is BaseGuard {
             if(executeFrom < timestamps[0]) revert TimeLockActive(txHash);
             
             // We clear the corresponding value
-            if(len == 1)
+            if(len == 1) {
+                emit TransactionExecuted(txHash, timestamps[0]);
                 delete transactions[txHash];
+            }
             else {
                 uint256 i = 1;
                 unchecked {
                     while(i < len && executeFrom > timestamps[i])
                         ++i;
                 }
+                emit TransactionExecuted(txHash, timestamps[i-1]);
                 shiftAndPop(timestamps, i-1);
             }
-            emit TransactionExecuted(txHash);
         }
     }
     function noTimelockNeeded( uint256 value, bytes calldata data, Enum.Operation operation) private view returns (bool) {

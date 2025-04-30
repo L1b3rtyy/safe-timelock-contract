@@ -56,10 +56,10 @@ describe('TimelockGuard', function () {
     const to = toAdd[0], value = 11, data = "0x", operation = 0;
 
     await expect(
-      timelockGuard.connect(owner1).cancelTransaction(txHash100, to, value, data, operation, 0, 0)
+      timelockGuard.connect(owner1).cancelTransaction(txHash100, 0, 0)
     ).to.be.revertedWith("UnAuthorized");
     await expect(
-      timelockGuard.cancelTransaction(txHash100, to, value, data, operation, 0, 0)
+      timelockGuard.cancelTransaction(txHash100, 0, 0)
     ).to.be.revertedWith("CancelMisMatch");
 
     const txHash = [];
@@ -85,7 +85,7 @@ describe('TimelockGuard', function () {
       const timestamp = txs[hashPos];
       console.log("cancelTransaction - " + test.desc + ", [pos, timestamp]=" + [test.pos, timestamp] + ", transactions before=", txs);
       await expect(
-        timelockGuard.cancelTransaction(_txHash, to, value, data, operation, test.pos, timestamp)
+        timelockGuard.cancelTransaction(_txHash, test.pos, timestamp)
       ).to.emit(timelockGuard, "TransactionCanceled");
       nbTx[_txHash]--;
       const txsAfter = await getTransactions(timelockGuard, _txHash, nbTx[_txHash]);
@@ -95,7 +95,7 @@ describe('TimelockGuard', function () {
     }
     console.log("cancelTransaction - no match"); 
     await expect(
-      timelockGuard.cancelTransaction(txHash[1], to, value, data, operation, 1, 999)
+      timelockGuard.cancelTransaction(txHash[1], 1, 999)
     ).to.be.revertedWith("CancelMisMatch");
   });
   it('setConfig', async function () {
@@ -123,16 +123,16 @@ describe('TimelockGuard', function () {
     const txs = await getTransactions(timelockGuard, txHash1, 3);
 
     await expect(
-      timelockGuard.cancelTransaction(txHash1, to1, value, data, operation, 1, txs[1])
+      timelockGuard.cancelTransaction(txHash1, 1, txs[1])
     ).to.emit(timelockGuard, "TransactionCanceled");
     await expect(
       timelockGuard.setConfig(25, 4, 8, [txHash1, txHash2])
     ).to.emit(timelockGuard, "TimelockConfigChanged").to.emit(timelockGuard, "TransactionsCleared");
     await expect(
-      timelockGuard.cancelTransaction(txHash1, to1, value, data, operation, 0, 0)
+      timelockGuard.cancelTransaction(txHash1, 0, 0)
     ).to.be.revertedWith("CancelMisMatch");
     await expect(
-      timelockGuard.cancelTransaction(txHash2, to2, value, data, operation, 0, 0)
+      timelockGuard.cancelTransaction(txHash2, 0, 0)
     ).to.be.revertedWith("CancelMisMatch");
 
     
@@ -228,7 +228,7 @@ describe('TimelockGuard', function () {
 
     const queueData = buildData("queueTransaction", [to, value, data, 0]);
     await timelockGuard.checkTransaction(timelockGuard.address, value, queueData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, executor);
-    const cancelData = buildData("cancelTransaction", ["0x57c3811681d5f2025f9765a045fb5cb542a1b80e307437fbc4a693a718da1f9a", to, value, data, 0, 0, 0]);
+    const cancelData = buildData("cancelTransaction", ["0x57c3811681d5f2025f9765a045fb5cb542a1b80e307437fbc4a693a718da1f9a", 0, 0]);
     await timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, executor);
     const configData = buildData("setConfig", [timelockDuration, throttle, limitNoTimelock, []]);
     await expect(
@@ -297,7 +297,7 @@ function buildData(functionName, args) {
   let moduleAbi = "";
   if(functionName == "setConfig")           moduleAbi = "function setConfig(uint64 _timelockDuration, uint64 _throttle, uint128 _limitNoTimelock, bytes32[] calldata clearHashes)";
   if(functionName == "queueTransaction")    moduleAbi = "function queueTransaction(address to, uint256 value, bytes calldata data, uint8 operation)";
-  if(functionName == "cancelTransaction")   moduleAbi = "function cancelTransaction(bytes32 txHash, address to, uint256 value, bytes calldata data, uint8 operation, uint256 timestampPos, uint256 timestamp)";
+  if(functionName == "cancelTransaction")   moduleAbi = "function cancelTransaction(bytes32 txHash, uint256 timestampPos, uint256 timestamp)";
   const iface = new ethers.utils.Interface([moduleAbi]);
   return iface.encodeFunctionData(functionName, args);
 }

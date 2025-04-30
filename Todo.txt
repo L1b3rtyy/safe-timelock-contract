@@ -1,10 +1,6 @@
 Timelock, (subject, priority, difficulty, effort)
 - Cancel transactions with higher quorum                                                H H H
-- Replace To by contact when available                                                  L L M
-- Show transactions in process (to be queued / cancelled / executed)                    H M H
-- Show who are the signers                                                              M L M
 - Implement an upgradable contracts                                                     H M L
-- Allow installing contract / setGuard from the UI                                      H M M
 
 Pay gas with Safe balance
 Hide signers and balances use Zero Knowledge

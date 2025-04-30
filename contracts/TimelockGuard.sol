@@ -5,6 +5,8 @@ import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManag
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 contract TimelockGuard is BaseGuard {
 
+    string public constant VERSION = "0.1.0";
+
     error UnAuthorized(address caller);
     error ZerodAddess();
     error InvalidConfig(uint64 timelockDuration, uint64 throttle);

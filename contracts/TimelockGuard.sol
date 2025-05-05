@@ -5,7 +5,7 @@ import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManag
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 contract TimelockGuard is BaseGuard {
 
-    string public constant VERSION = "0.1.0";
+    string public constant VERSION = "0.1.1";
 
     error UnAuthorized(address caller);
     error ZerodAddess();
@@ -80,7 +80,7 @@ contract TimelockGuard is BaseGuard {
     /// @notice Using an array allow for several identical transactions to be in the queue at the same time. Timestamp are always in ascending order, and the most recent are cleared first.
     mapping(bytes32 => uint256[]) public transactions;
     
-    event TransactionQueued(bytes32 txHash, bytes data, address to, uint256 value, Enum.Operation operation); // Full data is emitted, future optimization would be to store the data off-chain at queue time instead
+    event TransactionQueued(bytes32 txHash); // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
     event TransactionCanceled(bytes32 txHash, uint256 timestamp);
     event TransactionCleared(bytes32 txHash);
     event TransactionsCleared(bytes32[] txHash);
@@ -94,7 +94,7 @@ contract TimelockGuard is BaseGuard {
 
         lastQueueTime = block.timestamp;
         transactions[txHash].push(block.timestamp);
-        emit TransactionQueued(txHash, data, to, value, operation);
+        emit TransactionQueued(txHash);
     }
 
     function cancelTransaction(bytes32 txHash, uint256 timestampPos, uint256 timestamp) external {

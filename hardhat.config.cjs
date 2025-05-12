@@ -3,11 +3,9 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-ethers");
 require("hardhat-gas-reporter");
 require('solidity-coverage');
+require('@openzeppelin/hardhat-upgrades');
 
-const { infuraAPIkeySepolia } = require('./secrets.json');
-const { deployerWalletPrivateKey } = require('./secrets.json');
-const { etherscanAPIkey } = require('./secrets.json');
-
+const { infuraAPIkeySepolia, deployerWalletPrivateKey, etherscanAPIkey } = require('./secrets.json');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {

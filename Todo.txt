@@ -1,6 +1,0 @@
-Timelock, (subject, priority, difficulty, effort)
-- Cancel transactions with higher quorum                                                H H H
-- Implement an upgradable contracts                                                     H M L
-
-Pay gas with Safe balance
-Hide signers and balances use Zero Knowledge

@@ -4,9 +4,9 @@ pragma solidity ^0.8.28;
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-contract TimelockGuard is BaseGuard, Initializable {
+contract TimelockGuardv021 is BaseGuard, Initializable {
 
-    string public constant VERSION = "0.2.2";
+    string public constant VERSION = "0.2.1";
 
     error UnAuthorized(address caller, bool reason);
     error ZerodAddess();
@@ -40,7 +40,7 @@ contract TimelockGuard is BaseGuard, Initializable {
             }
         }
         
-        if(quorumExecute > 0 && signatures.length >= quorumExecute)
+        if(signatures.length >= quorumExecute)
             return;
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
@@ -182,8 +182,6 @@ contract TimelockGuard is BaseGuard, Initializable {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
         return keccak256(abi.encodePacked(to, value, data, operation));
     }
-    /// @notice The minimum quorum needed to cancel a queued transaction. 0 or a value below or equal the default Safe threshold means no specific quorum is needed. 
     uint8 public quorumCancel;
-    /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 disactivate direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
     uint8 public quorumExecute;
 }

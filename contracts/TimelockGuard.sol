@@ -39,7 +39,7 @@ contract TimelockGuard is BaseGuard, Initializable {
                 return;
             }
         }
-        
+        // Skip if the transaction is signed by enough signers to be executed directly
         if(quorumExecute > 0 && signatures.length >= quorumExecute)
             return;
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition

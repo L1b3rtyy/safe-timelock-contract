@@ -1,16 +1,36 @@
-FAUCET
+# SafeTimelock
+
+SafeTimelock adds a timelock functionality to any Safe multisig Wallet
+
+## Architecture
+
+The contract should be set as the guard for the given Safe wallet and can be managed from a Safe App, https://safe-timelock-ui.vercel.app/ (repo https://github.com/L1b3rtyy/safe-timelock-ui)
+
+WARNING: setting the guard of a Safe Wallet is very sensitive, DON'T DO this if you dont know what you are doing.
+
+## Functionality
+
+Once in place the SafeTimelock will:
+1. Force 'most' transactions to be queued first for a given timelapse, before they can be exectued
+2. Allow cancelling queued transactions
+3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
+
+## Faucet to get Sepolia Test ETH
 
 https://cloud.google.com/application/web3/faucet/ethereum/sepolia
 https://docs.metamask.io/developer-tools/faucet/
 https://sepolia-faucet.pk910.de/
 
-COMPILE AND TEST
+## Compilation and Test
 
-Compile                 npx hardhat compile
-Test coverage           npx hardhat coverage 
-Gas usage               npx hardhat test
+Compilation
+```npx hardhat compile```
+Test coverage
+```npx hardhat coverage``` 
+Gas usage
+```npx hardhat test```
 
-DEPLOY AND VERIFY
+## Contract Deployment and Verification 
 
 (Use --network hardhat to test first and avoid wasting gas)
 

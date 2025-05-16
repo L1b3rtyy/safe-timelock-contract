@@ -5,7 +5,7 @@ import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManag
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "1.1.0";
+    string public constant VERSION = "1.1.1";
 
     error UnAuthorized(address caller, bool reason);
     error ZerodAddess();
@@ -28,6 +28,9 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
     function checkTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, address executor ) external {
         checkSender();
+        // Skip if the transaction is signed by enough signers to be executed directly
+        if(quorumExecute > 0 && signatures.length >= quorumExecute)
+            return;
         // allow skipping the queue for queueTransaction or cancelTransaction
         if (to == address(this) && data.length > 3) {
             bytes4 selector = bytes4(data);
@@ -38,9 +41,6 @@ abstract contract BaseTimelockGuard is BaseGuard {
                 return;
             }
         }
-        // Skip if the transaction is signed by enough signers to be executed directly
-        if(quorumExecute > 0 && signatures.length >= quorumExecute)
-            return;
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
@@ -186,15 +186,3 @@ abstract contract BaseTimelockGuard is BaseGuard {
     /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 disactivate direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
     uint8 public quorumExecute;
 }
-
-// |      cancelTransaction     ·         29,094  ·       50,310  ·         38,628  ·             8  ·           -  │
-// ·····························|·················|···············|·················|················|···············
-// |      checkAfterExecution   ·         22,042  ·       22,054  ·         22,048  ·             2  ·           -  │
-// ·····························|·················|···············|·················|················|···············
-// |      checkTransaction      ·         27,444  ·       53,390  ·         39,515  ·            16  ·           -  │
-// ·····························|·················|···············|·················|················|···············
-// |      initialize            ·        135,683  ·      135,695  ·        135,686  ·             8  ·           -  │
-// ·····························|·················|···············|·················|················|···············
-// |      queueTransaction      ·         61,141  ·       78,474  ·         70,268  ·            45  ·           -  │
-// ·····························|·················|···············|·················|················|···············
-// |      setConfig             ·         33,163  ·       49,484  ·         36,937  ·            13  ·           -  │

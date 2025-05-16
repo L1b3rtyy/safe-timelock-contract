@@ -8,8 +8,7 @@ const txHash100 = "0x8b132efbd47825da4986d3581f78eddc4865866e7626f34fbe0c14c9a4d
 const zero = "0x0000000000000000000000000000000000000000";
 const quorumCancel = 2, quorumExecute = 3;
 
-// Start test block
-describe('TimelockGuard', function () {  
+describe('TimelockGuardUpgradeable', function () { 
   it('initialize', async function () {
     const [safe] = await ethers.getSigners();
     const TimelockGuard = await ethers.getContractFactory("TimelockGuardUpgradeable");
@@ -22,6 +21,8 @@ describe('TimelockGuard', function () {
 
     await timelockGuard.initialize(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
   });
+})
+describe('TimelockGuard', function () { 
     it('constructor', async function () {
       const [safe] = await ethers.getSigners();
       const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
@@ -33,6 +34,8 @@ describe('TimelockGuard', function () {
       const timelockGuard = await TimelockGuard.deploy(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute);
       await timelockGuard.deployed();
     });
+})
+describe('BaseTimelockGuard', function () { 
   it('queueTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
 

@@ -4,43 +4,44 @@ https://cloud.google.com/application/web3/faucet/ethereum/sepolia
 https://docs.metamask.io/developer-tools/faucet/
 https://sepolia-faucet.pk910.de/
 
-HARDHAT
+COMPILE AND TEST
 
 Compile                 npx hardhat compile
-Test deployment         npx hardhat run scripts/deploy.js --network hardhat
-                        npx hardhat run scripts/deployProxy.js --network hardhat
-                        npx hardhat run ./scripts/validateUpgrade.js --network hardhat
-                        npx hardhat run ./scripts/prepareUpgrade.js --network hardhat
-Deploy contracts        npx hardhat run ./scripts/deploy.js --network sepolia
-                        npx hardhat run ./scripts/deployProxy.js --network sepolia
-                        npx hardhat run ./scripts/validateUpgrade.js --network sepolia
-                        npx hardhat run ./scripts/prepareUpgrade.js --network sepolia
-Verify contracts        npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.js addGuard
-                        npx hardhat verify --network sepolia addGuard
+Test coverage           npx hardhat coverage 
+Gas usage               npx hardhat test
+
+DEPLOY AND VERIFY
+
+(Use --network hardhat to test first and avoid wasting gas)
+
+Non upgradable          npx hardhat run ./scripts/deploy.js --network sepolia
+Verify                  npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.js {{GuardAddress}}
+
+Upgradable
+1. The implementation contract is already deployed, you just want to deploy the proxy and proxy admin - best to save gas
+                        npx hardhat run ./scripts/upgradable/deployProxy.js --network sepolia
+2. To deploy everything from scratch: implementation, proxy and proxy admin - will cost more
+                        npx hardhat run ./scripts/upgradable/deploy.js --network sepolia
+3. To upgrade an already deployed settup: will only deploy the new implementation and have the proxy point to it
+                        npx hardhat run ./scripts/upgradable/validateUpgrade.js --network sepolia
+                        npx hardhat run ./scripts/upgradable/prepareUpgrade.js --network sepolia
+Verify implementation   npx hardhat verify --network sepolia {{ImpAddress}}
 
 ADDRESSES
 
-Deployer    0xc5D0588C145b6eDDa609492efE41EB1b82029d34
-Safe        0x67c3092073Ca9ADC7e228d75fC8E29D504c5EFce
-Proxy       0x09414351726200E272dFCD31F5092a78CB4EC3c8
-Proxy Admin 0xaF6fDDC102Cf91DB982EDa41a46E17Dee5c7FD21
-Imp         0x75A04D66745368086074e928B53899ef3c55aDBE  0.1.0 (Without proxy)
-            0x7760f93Bb6c7c15196E551836656E43E0b7b05af  0.2.0
-            0x5Be16E7d0795618E8ef015F29b72F22bFBba31Aa  0.2.1
-            0x41DeBEC8262D92F6Ce4eaAa781CF2529Bba87158  0.2.2
+Non Upgradable      0xb3bc0C7dcE4FFD457BAB6FA4434aF413b5887067
 
-EXPLORER
+Upgradable
+Proxy               0x8AC7d9B0E7E5B63b931917442fE64Bb7A6aAD01E
+Admin               0xaF6fDDC102Cf91DB982EDa41a46E17Dee5c7FD21
+Imp                 0x1c51eb09730e5f6710b8A4192e54F646058BAD5b  1.0.0
+                    0x1300Ba2Bd3ab957ec7caa3120d2605951a7E19C4  1.1.0
 
-https://sepolia.etherscan.io/address/add
+REMINDER, UINT IN SMART CONTRACTS
 
-DEPLOYMENT
-1. Create Safe with 1/2 signers
-2. Copy Safe add to arguments.js - Deploy and verify guard
-3. Change Safe to 2/2 signers
-4. Call setGuard on Safe contract
-=> 4 transactions
-
-TESTS
-
-npx hardhat coverage    => Test coverage
-npx hardhat test        => Gas usage
+uint8 (8 bits): Range from 0 to 255
+uint16 (16 bits): Range from 0 to 65,535
+uint32 (32 bits): Range from 0 to 4,294,967,295
+uint64 (64 bits): Range from 0 to 18,446,744,073,709,551,615
+uint128 (128 bits): Range from 0 to 340,282,366,920,938,463,463,374,607,431,768,211,455
+uint256 (256 bits): Range from 0 to 115,792,089,237,316,195,423,570,985,008,687,907,853,269,984,665,640,564,039,457,584,007,913,129,639,936

@@ -3,12 +3,11 @@ pragma solidity ^0.8.28;
 
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-contract TimelockGuardv020 is BaseGuard, Initializable {
+abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "0.2.0";
+    string public constant VERSION = "1.1.0";
 
-    error UnAuthorized(address caller);
+    error UnAuthorized(address caller, bool reason);
     error ZerodAddess();
     error InvalidConfig(uint64 timelockDuration, uint64 throttle);
     error Throttled(uint256 timestamp, uint256 lastQueueTime, uint64 throttle);
@@ -17,12 +16,12 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
     error TimeLockActive(bytes32 txHash);
     error CancelMisMatch(bytes32 txHash); 
     function checkSender() private view {
-        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender);
+        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, true);
     }
 
-    function initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock) public initializer {
+    function _initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
         if(address(_safe) == address(0)) revert ZerodAddess();
-        setConfigHelper(timelockDuration, throttle, limitNoTimelock);
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
         safe = _safe;
         lastQueueTime = 1;
     }
@@ -32,9 +31,16 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
         // allow skipping the queue for queueTransaction or cancelTransaction
         if (to == address(this) && data.length > 3) {
             bytes4 selector = bytes4(data);
-            if (selector == this.queueTransaction.selector || selector == this.cancelTransaction.selector)
+            if (selector == this.queueTransaction.selector)
                 return;
+            else if(selector == this.cancelTransaction.selector) {
+                if(signatures.length < quorumCancel) revert UnAuthorized(executor, false);
+                return;
+            }
         }
+        // Skip if the transaction is signed by enough signers to be executed directly
+        if(quorumExecute > 0 && signatures.length >= quorumExecute)
+            return;
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
@@ -50,7 +56,7 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
         uint128 limitNoTimelock;
     }
     TimelockConfig public timelockConfig;
-    uint256 private lastQueueTime;
+    uint256 internal lastQueueTime;
     event TimelockConfigChanged();  // Empty event to save on gas as we dont need the history. Check the field of timelockConfig for the new values
 
     /// Set the configuration for this timelock and allow clearings caches that may have become irrelevant due to the new configuration (this is not verified in the contract) 
@@ -58,21 +64,23 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
     /// @param throttle            Throttle time, 0 disables the throttling
     /// @param limitNoTimelock     Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
     /// @param clearHashes          Transaction hashes for which to clear the timelock. Relevant when the config has been changed so no timelock is need for these hashes 
-    function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, bytes32[] calldata clearHashes) external {
+    function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
         checkSender();
-        setConfigHelper(timelockDuration, throttle, limitNoTimelock);
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
         uint256 len = clearHashes.length;
         if(len != 0) {
             unchecked {
                 for(uint256 i = 0; i < len; ++i)
                     delete transactions[clearHashes[i]];
             }
-            emit TransactionsCleared(clearHashes);
+            emit TransactionsCleared();
         }
         emit TimelockConfigChanged();
     }
-    function setConfigHelper(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock) private {
+    function setConfigHelper(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
         if(timelockDuration > 1209600 || throttle > 3600) revert InvalidConfig(timelockDuration, throttle);
+        quorumCancel = _quorumCancel;
+        quorumExecute = _quorumExecute;
         timelockConfig.timelockDuration = timelockDuration;
         timelockConfig.throttle = throttle;
         timelockConfig.limitNoTimelock = limitNoTimelock;
@@ -83,9 +91,9 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
     mapping(bytes32 => uint256[]) public transactions;
     
     event TransactionQueued(bytes32 txHash); // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
-    event TransactionCanceled(bytes32 txHash, uint256 timestamp);
+    event TransactionCanceled();
     event TransactionCleared(bytes32 txHash);
-    event TransactionsCleared(bytes32[] txHash);
+    event TransactionsCleared();
     event TransactionExecuted(bytes32 txHash, uint256 timestamp);
 
     function queueTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation) external {
@@ -110,13 +118,13 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
                 delete transactions[txHash];
             else
                 shiftAndPop(timestamps, timestampPos);
-            emit TransactionCanceled(txHash, timestamp);
+            emit TransactionCanceled();
             return;
         }
         for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
             if(timestamp == timestamps[i]) {
                 shiftAndPop(timestamps, i);
-                emit TransactionCanceled(txHash, timestamp);
+                emit TransactionCanceled();
                 return;
             }
             if(i==0)    break;
@@ -173,4 +181,20 @@ contract TimelockGuardv020 is BaseGuard, Initializable {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
         return keccak256(abi.encodePacked(to, value, data, operation));
     }
+    /// @notice The minimum quorum needed to cancel a queued transaction. 0 or a value below or equal the default Safe threshold means no specific quorum is needed. 
+    uint8 public quorumCancel;
+    /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 disactivate direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
+    uint8 public quorumExecute;
 }
+
+// |      cancelTransaction     ·         29,094  ·       50,310  ·         38,628  ·             8  ·           -  │
+// ·····························|·················|···············|·················|················|···············
+// |      checkAfterExecution   ·         22,042  ·       22,054  ·         22,048  ·             2  ·           -  │
+// ·····························|·················|···············|·················|················|···············
+// |      checkTransaction      ·         27,444  ·       53,390  ·         39,515  ·            16  ·           -  │
+// ·····························|·················|···············|·················|················|···············
+// |      initialize            ·        135,683  ·      135,695  ·        135,686  ·             8  ·           -  │
+// ·····························|·················|···············|·················|················|···············
+// |      queueTransaction      ·         61,141  ·       78,474  ·         70,268  ·            45  ·           -  │
+// ·····························|·················|···············|·················|················|···············
+// |      setConfig             ·         33,163  ·       49,484  ·         36,937  ·            13  ·           -  │

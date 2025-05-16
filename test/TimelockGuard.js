@@ -5,21 +5,34 @@ const toRoot = "0x000000000000000000000000000000000000000";
 const toAdd = [toRoot + 2, toRoot + 3, toRoot + 4, toRoot + 5]
 const timelockDuration = 30, throttle = 5, limitNoTimelock = 10;
 const txHash100 = "0x8b132efbd47825da4986d3581f78eddc4865866e7626f34fbe0c14c9a4d50cea";
+const zero = "0x0000000000000000000000000000000000000000";
+const quorumCancel = 2, quorumExecute = 3;
 
 // Start test block
 describe('TimelockGuard', function () {  
-  it('constructor', async function () {
+  it('initialize', async function () {
     const [safe] = await ethers.getSigners();
-    const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
+    const TimelockGuard = await ethers.getContractFactory("TimelockGuardUpgradeable");
     const timelockGuard = await TimelockGuard.deploy();
     await timelockGuard.deployed();
 
     await expect(
-      timelockGuard.initialize("0x0000000000000000000000000000000000000000", timelockDuration, throttle, limitNoTimelock, 2, 3)
+      timelockGuard.initialize(zero, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
     ).to.be.revertedWith("ZerodAddess");
 
-    await timelockGuard.initialize(safe.address, timelockDuration, throttle, limitNoTimelock, 2, 3)
+    await timelockGuard.initialize(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
   });
+    it('constructor', async function () {
+      const [safe] = await ethers.getSigners();
+      const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
+      
+      await expect(
+        TimelockGuard.deploy(zero, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute).then(timelockGuard => timelockGuard.deployed())
+      ).to.be.revertedWith("ZerodAddess");
+  
+      const timelockGuard = await TimelockGuard.deploy(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute);
+      await timelockGuard.deployed();
+    });
   it('queueTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
 
@@ -228,7 +241,7 @@ describe('TimelockGuard', function () {
 
     const queueData = buildData("queueTransaction", [to, value, data, 0]);
     await timelockGuard.checkTransaction(timelockGuard.address, value, queueData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, executor);
-    const cancelData = buildData("cancelTransaction", ["0x57c3811681d5f2025f9765a045fb5cb542a1b80e307437fbc4a693a718da1f9a", 0, 0]);
+    const cancelData = buildData("cancelTransaction", [txHash, 0, 0]);
     await timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, executor);
     await expect(
       timelockGuard.setConfig(timelockDuration, throttle, limitNoTimelock, 1, 2, [])
@@ -297,7 +310,7 @@ async function getEvent(tx) {
 }
 async function init(_timelockDuration) {
   const [safe, owner1, owner2] = await ethers.getSigners();
-  const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
+  const TimelockGuard = await ethers.getContractFactory("TimelockGuardUpgradeable");
   const timelockGuard = await TimelockGuard.deploy();
   await timelockGuard.deployed();
   await timelockGuard.initialize(safe.address, _timelockDuration || timelockDuration, throttle, limitNoTimelock, 0, 100);

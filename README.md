@@ -42,10 +42,11 @@ npx hardhat test
 
 ## Contract Deployment and Verification 
 
+The deployment scripts will log to the console the deployed contract addresses
+
 (Use ```--network hardhat``` to test first and avoid wasting gas)
 
 ### Non upgradable
-The deployment script will log to the console the deployed contract address
 
 Deployment
 ```
@@ -57,9 +58,6 @@ npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.js {
 ```
 
 ### Upgradable
-The deployment script will log to the console the deployed contract addresses of the Proxy and Proxy Admin contracts.
-
-To get the implementation contract, go to the Proxy Admin page on etherscan and run the method ```getPtoxyImplementation```
 
 1. The implementation contract is already deployed, you just want to deploy the proxy and proxy admin - best to save gas
 ```

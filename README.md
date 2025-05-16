@@ -72,15 +72,17 @@ npx hardhat run ./scripts/upgradable/deploy.js --network sepolia
 npx hardhat run ./scripts/upgradable/validateUpgrade.js --network sepolia  // Confirm the upgrade is fine
 npx hardhat run ./scripts/upgradable/prepareUpgrade.js --network sepolia   // Deploy the implementation contract only
 ```
-   Note: you will need the old version of the contract to run these, check the scripts
+Note: you will need the old version of the contract to run these, check the scripts
    
 Verify implementation (the proxy and proxy admin are automatically verified)
 ```
 npx hardhat verify --network sepolia {{ImpAddress}}
 ```
 
-## Deployed Implementation for Upgradable Contracts
+## Deployed Implementations for Upgradable Contracts
 
 [Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
 
 [Version 1.1.0](https://sepolia.etherscan.io/address/0x1300Ba2Bd3ab957ec7caa3120d2605951a7E19C4)
+
+[Version 1.1.1](https://sepolia.etherscan.io/address/0xe508A96611cfDC1828fDd3ba82c61665B6063A8b)

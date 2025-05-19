@@ -5,7 +5,7 @@ require("hardhat-gas-reporter");
 require('solidity-coverage');
 require('@openzeppelin/hardhat-upgrades');
 
-const { infuraAPIkeySepolia, deployerWalletPrivateKey, etherscanAPIkey } = require('./secrets.json');
+const { providerURL, deployerWalletPrivateKey, etherscanAPIkey } = require('./secrets.json');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -30,7 +30,7 @@ module.exports = {
   },
   networks: {
     sepolia: {
-      url: infuraAPIkeySepolia,
+      url: providerURL,
       accounts: [deployerWalletPrivateKey],
     },
   }

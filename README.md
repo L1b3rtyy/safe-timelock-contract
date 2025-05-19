@@ -11,7 +11,7 @@ WARNING: setting the guard of a Safe Wallet is very sensitive, DON'T DO this if 
 ## Functionality
 
 Once in place the SafeTimelock will:
-1. Force 'most' transactions to be queued first for a given timelapse, before they can be exectued
+1. Force 'most' transactions to be queued first for a given timelapse, before they can be executed
 2. Allow cancelling queued transactions
 3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
 
@@ -45,6 +45,17 @@ npx hardhat test
 The deployment scripts will log to the console the deployed contract addresses
 
 (Use ```--network hardhat``` to test first and avoid wasting gas)
+
+### Setup secrets.json
+
+The scripts load sensitive data from a file secrets.json in the same folder. It should contain:
+{
+  "safeAddress"                 // Mandatory  Address of the Safe wallet
+  "proxyAddress"                // Optional   Address of the proxy once deployed, used for upgrades
+  "providerURL"                 // Mandatory  Full URL with API key of the web3 provider, e.g. Infura
+  "deployerWalletPrivateKey"    // Mandatory  Private of the account making the deployment and paying for gas
+  "etherscanAPIkey"             // Optional   Etherscan API key used for contract verification
+}
 
 ### Non upgradable
 

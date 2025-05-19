@@ -46,9 +46,10 @@ The deployment scripts will log to the console the deployed contract addresses
 
 (Use ```--network hardhat``` to test first and avoid wasting gas)
 
-### Setup secrets.json
+### Setup ```secrets.json```
 
-The scripts load sensitive data from a file secrets.json in the same folder. It should contain:
+The scripts load sensitive data from a file ```secrets.json``` in the same folder. It should contain:
+```
 {
   "safeAddress"                 // Mandatory  Address of the Safe wallet
   "proxyAddress"                // Optional   Address of the proxy once deployed, used for upgrades
@@ -56,6 +57,7 @@ The scripts load sensitive data from a file secrets.json in the same folder. It 
   "deployerWalletPrivateKey"    // Mandatory  Private of the account making the deployment and paying for gas
   "etherscanAPIkey"             // Optional   Etherscan API key used for contract verification
 }
+```
 
 ### Non upgradable
 

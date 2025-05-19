@@ -4,7 +4,7 @@ SafeTimelock adds a timelock functionality to any Safe multisig Wallet
 
 ## Architecture
 
-The contract should be set as the guard for the given Safe wallet and can be managed from a Safe App, https://safe-timelock-ui.vercel.app/ (repo https://github.com/L1b3rtyy/safe-timelock-ui)
+The contract should be set as the guard for the given Safe wallet and can be managed from a Safe App, (repo for the Safe App https://github.com/L1b3rtyy/safe-timelock-ui)
 
 WARNING: setting the guard of a Safe Wallet is very sensitive, DON'T DO this if you dont know what you are doing.
 

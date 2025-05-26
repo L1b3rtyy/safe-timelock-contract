@@ -1,6 +1,7 @@
 node_modules
 .env
 /.openzeppelin
+Cookbook.txt
 
 # Hardhat files
 /cache
@@ -20,5 +21,6 @@ ignition/deployments/chain-31337
 
 /contracts/TimelockGuardUpgradeable_OLD.sol
 /contracts/BaseTimelockGuard_OLD.sol
+/Backup/**
 
 secrets.json

@@ -1,6 +1,8 @@
-const { upgrades } = require("hardhat");
-const { proxyAddress } = require('../../secrets.json');
-const { getUpgradeContract } = require('./_utilUpgrade.js');
+import hardhat from "hardhat";
+const { upgrades } = hardhat;
+import secrets from '../../secrets.json' assert { type: "json" };
+const { proxyAddress } = secrets;
+import { getUpgradeContract } from './_utilUpgrade.js';
 
 async function main() {
   const Guard = await getUpgradeContract();

@@ -1,14 +1,15 @@
 //@ts-check
-const { ethers, upgrades } = require("hardhat");
-const argumentsArray = require('../arguments.js');
-const { safeAddress } = require('../../secrets.json');
+import hardhat from "hardhat";
+const { ethers, upgrades } = hardhat;
+import argumentsArray from '../arguments.js';
+import secrets from '../../secrets.json' assert { type: "json" };
+const { safeAddress, latestImplAddress } = secrets;
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  const implAddress = "0x1300Ba2Bd3ab957ec7caa3120d2605951a7E19C4";
 
   const Guard = await ethers.getContractFactory("TimelockGuardUpgradeable", deployer);
-  await upgrades.forceImport(implAddress, Guard, { kind: "transparent" });
+  await upgrades.forceImport(latestImplAddress, Guard, { kind: "transparent" });
 
   const proxy = await upgrades.deployProxy(Guard, argumentsArray, {
     initializer: "initialize",

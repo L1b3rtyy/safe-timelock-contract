@@ -26,7 +26,18 @@ abstract contract BaseTimelockGuard is BaseGuard {
         lastQueueTime = 1;
     }
 
-    function checkTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, address executor ) external {
+    function checkTransaction(
+        address to, 
+        uint256 value, 
+        bytes memory data, 
+        Enum.Operation operation, 
+        uint256 /*safeTxGas*/,
+        uint256 /*baseGas*/,
+        uint256 /*gasPrice*/,
+        address /*gasToken*/,
+        address payable /*refundReceiver*/,
+        bytes memory signatures,
+        address executor ) external {
         checkSender();
         // Skip if the transaction is signed by enough signers to be executed directly
         if(quorumExecute > 0 && signatures.length >= quorumExecute)
@@ -141,7 +152,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         }
     }
 
-    function validateAndMarkExecuted (address to, uint256 value, bytes calldata data, Enum.Operation operation) private {
+    function validateAndMarkExecuted (address to, uint256 value, bytes memory data, Enum.Operation operation) private {
         bytes32 txHash = getTxHash(to, value, data, operation);
         if(noTimelockNeeded(value, data, operation)) {
             // If it was queued anyway (for instance if timelockDuration == 0 now and was > 0 before), remove it from storage
@@ -173,11 +184,11 @@ abstract contract BaseTimelockGuard is BaseGuard {
             }
         }
     }
-    function noTimelockNeeded( uint256 value, bytes calldata data, Enum.Operation operation) private view returns (bool) {
+    function noTimelockNeeded( uint256 value, bytes memory data, Enum.Operation operation) private view returns (bool) {
         // We want simple ETH transfers smaller than limitNoTimelock to not require a timelock
         return timelockConfig.timelockDuration == 0 || (operation == Enum.Operation.Call && (data.length == 0 || (data.length == 1 && data[0] == 0)) && timelockConfig.limitNoTimelock >= value);
     }
-    function getTxHash(address to, uint256 value, bytes calldata data, Enum.Operation operation) private pure returns (bytes32) {
+    function getTxHash(address to, uint256 value, bytes memory data, Enum.Operation operation) private pure returns (bytes32) {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
         return keccak256(abi.encodePacked(to, value, data, operation));
     }

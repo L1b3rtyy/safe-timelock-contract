@@ -1,7 +1,9 @@
-const { ethers, upgrades } = require("hardhat");
-const { proxyAddress } = require('../../secrets.json');
+import hardhat from "hardhat";
+const { ethers, upgrades } = hardhat;
+import secrets from '../../secrets.json' assert { type: "json" };
+const { proxyAddress } = secrets;
 
-async function getUpgradeContract() {
+export async function getUpgradeContract() {
   const [deployer] = await ethers.getSigners();
   console.log("Force import proxy...");
   // Load the old contract factory
@@ -10,4 +12,3 @@ async function getUpgradeContract() {
   console.log("Preparing upgrade by account:", deployer.address);
   return ethers.getContractFactory("TimelockGuardUpgradeable", deployer);
 }
-module.exports = { getUpgradeContract };

@@ -67,7 +67,7 @@ npx hardhat run ./scripts/deploy.js --network sepolia
 ```
 Verify
 ```
-npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.js {{GuardAddress}}
+npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.cjs {{GuardAddress}}
 ```
 
 ### Upgradable
@@ -96,6 +96,19 @@ npx hardhat verify --network sepolia {{ImpAddress}}
 
 [Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
 
+First upgradable version
+
 [Version 1.1.0](https://sepolia.etherscan.io/address/0x1300Ba2Bd3ab957ec7caa3120d2605951a7E19C4)
 
+Simplified some event's signature to save gas
+
 [Version 1.1.1](https://sepolia.etherscan.io/address/0xe508A96611cfDC1828fDd3ba82c61665B6063A8b)
+
+Moved condition on ```quorumExecute``` to exit ```checkTransaction``` earlier and save gas
+
+[Version 1.2.0](https://sepolia.etherscan.io/address/0x16Be677756C52Cb55E38d1a3661b7060b850edB5)
+
+Removes throttle functionality as it 
+- Uses gas
+- Does not provide clear value
+- Allows for a DOS attack

@@ -5,12 +5,11 @@ import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManag
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "1.1.1";
+    string public constant VERSION = "1.2.0";
 
     error UnAuthorized(address caller, bool reason);
     error ZerodAddess();
-    error InvalidConfig(uint64 timelockDuration, uint64 throttle);
-    error Throttled(uint256 timestamp, uint256 lastQueueTime, uint64 throttle);
+    error InvalidConfig(uint64 timelockDuration);
     error QueuingNeeded(bytes32 txHash);
     error QueuingNotNeeded(uint64 timelockDuration, uint128 limitNoTimelock, uint256 value);
     error TimeLockActive(bytes32 txHash);
@@ -19,11 +18,10 @@ abstract contract BaseTimelockGuard is BaseGuard {
         if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, true);
     }
 
-    function _initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
+    function _initialize(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
         if(address(_safe) == address(0)) revert ZerodAddess();
-        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
+        setConfigHelper(timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
         safe = _safe;
-        lastQueueTime = 1;
     }
 
     function checkTransaction(
@@ -72,12 +70,11 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
     /// Set the configuration for this timelock and allow clearings caches that may have become irrelevant due to the new configuration (this is not verified in the contract) 
     /// @param timelockDuration    Duration of timelock, 0 disables the timelock, transactions can be executed directly
-    /// @param throttle            Throttle time, 0 disables the throttling
     /// @param limitNoTimelock     Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
     /// @param clearHashes          Transaction hashes for which to clear the timelock. Relevant when the config has been changed so no timelock is need for these hashes 
-    function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
+    function setConfig (uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
         checkSender();
-        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
+        setConfigHelper(timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
         uint256 len = clearHashes.length;
         if(len != 0) {
             unchecked {
@@ -88,12 +85,11 @@ abstract contract BaseTimelockGuard is BaseGuard {
         }
         emit TimelockConfigChanged();
     }
-    function setConfigHelper(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
-        if(timelockDuration > 1209600 || throttle > 3600) revert InvalidConfig(timelockDuration, throttle);
+    function setConfigHelper(uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
+        if(timelockDuration > 1209600) revert InvalidConfig(timelockDuration);
         quorumCancel = _quorumCancel;
         quorumExecute = _quorumExecute;
         timelockConfig.timelockDuration = timelockDuration;
-        timelockConfig.throttle = throttle;
         timelockConfig.limitNoTimelock = limitNoTimelock;
     }
     
@@ -109,11 +105,9 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
     function queueTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation) external {
         checkSender();
-        if(block.timestamp < lastQueueTime + timelockConfig.throttle) revert Throttled(block.timestamp, lastQueueTime, timelockConfig.throttle);
         if(noTimelockNeeded(value, data, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock, value);
         bytes32 txHash = getTxHash(to, value, data, operation);
 
-        lastQueueTime = block.timestamp;
         transactions[txHash].push(block.timestamp);
         emit TransactionQueued(txHash);
     }

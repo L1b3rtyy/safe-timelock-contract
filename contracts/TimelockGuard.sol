@@ -5,7 +5,7 @@ import { BaseTimelockGuard } from "./BaseTimelockGuard.sol";
 
 contract TimelockGuard is BaseTimelockGuard {
 
-    constructor(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) {
-        super._initialize(_safe, timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
+    constructor(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) {
+        super._initialize(_safe, timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
     }
 }

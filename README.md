@@ -53,6 +53,7 @@ The scripts load sensitive data from a file ```secrets.json```. It should contai
 {
   "safeAddress"                 // Mandatory  Address of the Safe wallet
   "proxyAddress"                // Optional   Address of the proxy once deployed, used for upgrades
+  "latestImplAddress"           // Optional   Address of the latest implementation, used to deploy the proxy only
   "providerURL"                 // Mandatory  Full URL with API key of the web3 provider, e.g. Infura
   "deployerWalletPrivateKey"    // Mandatory  Private key of the account making the deployment and paying for gas
   "etherscanAPIkey"             // Optional   Etherscan API key used for contract verification

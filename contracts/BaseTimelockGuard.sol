@@ -3,9 +3,27 @@ pragma solidity ^0.8.28;
 
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
+interface MySafe {
+    function getThreshold() external view returns (uint256);
+    function nonce() external view returns (uint256);
+    function getTransactionHash(
+        address to,
+        uint256 value,
+        bytes calldata data,
+        Enum.Operation operation,
+        uint256 safeTxGas,
+        uint256 baseGas,
+        uint256 gasPrice,
+        address gasToken,
+        address refundReceiver,
+        uint256 nonce
+    ) external view returns (bytes32);
+    function checkNSignatures(bytes32 dataHash, bytes memory data, bytes memory signatures, uint256 requiredSignatures) external view;   
+}
 abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "1.2.0";
+    string public constant VERSION = "1.3.1";
+    string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     error UnAuthorized(address caller, bool reason);
     error ZerodAddess();
@@ -29,31 +47,79 @@ abstract contract BaseTimelockGuard is BaseGuard {
         uint256 value, 
         bytes memory data, 
         Enum.Operation operation, 
-        uint256 /*safeTxGas*/,
-        uint256 /*baseGas*/,
-        uint256 /*gasPrice*/,
-        address /*gasToken*/,
-        address payable /*refundReceiver*/,
+        uint256 safeTxGas,
+        uint256 baseGas,
+        uint256 gasPrice,
+        address gasToken,
+        address payable refundReceiver,
         bytes memory signatures,
         address executor ) external {
         checkSender();
+        MySafe Isafe = MySafe(safe);
         // Skip if the transaction is signed by enough signers to be executed directly
-        if(quorumExecute > 0 && signatures.length >= quorumExecute)
+        if(quorumExecute > 0 && signatures.length/65 >= quorumExecute && quorumExecute > Isafe.getThreshold()) {
+            checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumExecute);
             return;
+        }
         // allow skipping the queue for queueTransaction or cancelTransaction
         if (to == address(this) && data.length > 3) {
             bytes4 selector = bytes4(data);
             if (selector == this.queueTransaction.selector)
                 return;
             else if(selector == this.cancelTransaction.selector) {
-                if(signatures.length < quorumCancel) revert UnAuthorized(executor, false);
+                if(quorumCancel == 0)
+                    return;
+                if(signatures.length/65 < quorumCancel) revert UnAuthorized(executor, false);
+                if(quorumCancel > Isafe.getThreshold())
+                    checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumCancel);
                 return;
             }
         }
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-
+    // Optimized slice function equivalent of the JavaScript's homonym
+    function slice(bytes memory signatures, uint256 start, uint256 end) private pure returns (bytes memory result) {
+        uint256 len = end - start;
+        assembly {
+            // Allocate memory for the new bytes array: 32 bytes for length + len bytes data
+            result := mload(0x40) // get free memory pointer
+            mstore(result, len)   // set length at beginning of result
+            // Get pointer to data: signatures + 32 (skip length) + start
+            let src := add(add(signatures, 32), start)
+            // Get pointer to where we will copy the data
+            let dst := add(result, 32)
+            // Copy data from src to dst
+            for { let i := 0 } lt(i, len) { i := add(i, 32) } {
+                // Copy 32 bytes at a time, careful of overrun
+                mstore(add(dst, i), mload(add(src, i)))
+            }
+            // Update free memory pointer: pad to 32 bytes
+            mstore(0x40, add(dst, and(add(len, 31), not(31))))
+        }
+        return result;
+    }
+    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, uint256 totalQuorum) private view {
+        MySafe Isafe = MySafe(safe);
+        bytes32 txHash = Isafe.getTransactionHash(
+            // Transaction info
+            to,
+            value,
+            data,
+            operation,
+            // Payment info
+            safeTxGas,
+            baseGas,
+            gasPrice,
+            gasToken,
+            refundReceiver,
+            // Signature info
+            Isafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
+        uint256 threshold = Isafe.getThreshold();
+        bytes memory _signatures = slice(signatures, threshold*65, totalQuorum*65);
+        Isafe.checkNSignatures(txHash, data, _signatures, totalQuorum - threshold);
+    }
+// |      checkTransaction      ·              -  ·            -  ·        101,778  ·             1  ·           -  │
     function checkAfterExecution(bytes32 txHash, bool success) external {
         // No action needed here
     }

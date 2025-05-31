@@ -4,23 +4,24 @@ require("@nomiclabs/hardhat-ethers");
 require("hardhat-gas-reporter");
 require('solidity-coverage');
 require('@openzeppelin/hardhat-upgrades');
+require("hardhat-dependency-compiler");
 
 const { providerURL, deployerWalletPrivateKey, etherscanAPIkey } = require('./secrets.json');
 
-/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
+  
   gasReporter: {
-    enabled: true
+    enabled: true,
+    trackGasDeltas: true,
   },
   solidity: {
     version: "0.8.28",
     settings: {
-      viaIR: true,
       optimizer: {
         enabled: true,
-        runs: 200,
-      },
-    },
+        runs: 1000,
+      }
+    }
   },
   paths: {
     sources: "./contracts",
@@ -29,9 +30,19 @@ module.exports = {
     apiKey: etherscanAPIkey  
   },
   networks: {
+    hardhat: {
+      allowUnlimitedContractSize: true, // Required for Safe contracts
+      gas: "auto"                       // Necessary to impersonate the Safe contract
+    },
     sepolia: {
       url: providerURL,
       accounts: [deployerWalletPrivateKey],
     },
-  }
+  },
+  dependencyCompiler: {
+    paths: [
+      "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol",
+      "@safe-global/safe-contracts/contracts/Safe.sol",
+    ],
+  },
 };

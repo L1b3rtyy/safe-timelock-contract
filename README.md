@@ -13,7 +13,7 @@ More details on building a Guard: [Building a Guard for Safe Smart Account](http
 ## Functionality
 
 Once in place the SafeTimelock will:
-1. Force 'most' transactions to be queued first for a given timelapse, before they can be executed
+1. Force 'most' transactions to be queued first for a given time span, before they can be executed
 2. Allow cancelling queued transactions
 3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
 

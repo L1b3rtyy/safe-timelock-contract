@@ -3,6 +3,7 @@ node_modules
 .TODO.txt
 /.openzeppelin
 Cookbook.txt
+.vscode
 
 # Hardhat files
 /cache
@@ -22,6 +23,6 @@ ignition/deployments/chain-31337
 
 /contracts/TimelockGuardUpgradeable_OLD.sol
 /contracts/BaseTimelockGuard_OLD.sol
-/Backup/**
+/Backup
 
 secrets.json

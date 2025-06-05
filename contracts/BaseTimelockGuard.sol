@@ -22,7 +22,7 @@ interface MySafe {
 }
 abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "1.3.1";
+    string public constant VERSION = "1.3.2";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     error UnAuthorized(address caller, bool reason);
@@ -78,26 +78,15 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    // Optimized slice function equivalent of the JavaScript's homonym
-    function slice(bytes memory signatures, uint256 start, uint256 end) private pure returns (bytes memory result) {
-        uint256 len = end - start;
+    // ⚠️ This function overwrites the original `signatures` array and returns a shallow slice.
+    // The original array must not be used after calling this.
+    function sliceShallow(bytes memory signatures, uint256 start, uint256 end) private pure returns (bytes memory result) {
         assembly {
-            // Allocate memory for the new bytes array: 32 bytes for length + len bytes data
-            result := mload(0x40) // get free memory pointer
-            mstore(result, len)   // set length at beginning of result
-            // Get pointer to data: signatures + 32 (skip length) + start
-            let src := add(add(signatures, 32), start)
-            // Get pointer to where we will copy the data
-            let dst := add(result, 32)
-            // Copy data from src to dst
-            for { let i := 0 } lt(i, len) { i := add(i, 32) } {
-                // Copy 32 bytes at a time, careful of overrun
-                mstore(add(dst, i), mload(add(src, i)))
-            }
-            // Update free memory pointer: pad to 32 bytes
-            mstore(0x40, add(dst, and(add(len, 31), not(31))))
+            // Pointer to the start of the slice data
+            result := add(signatures, start)
+            // Write new length just before the data
+            mstore(result, sub(end, start))
         }
-        return result;
     }
     function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, uint256 totalQuorum) private view {
         MySafe Isafe = MySafe(safe);
@@ -115,11 +104,11 @@ abstract contract BaseTimelockGuard is BaseGuard {
             refundReceiver,
             // Signature info
             Isafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
+        // Here we could simply call Isafe.checkNSignatures(txHash, data, signatures, totalQuorum) but we want to save gas by not verifyng again the signtures up to the threshold 
         uint256 threshold = Isafe.getThreshold();
-        bytes memory _signatures = slice(signatures, threshold*65, totalQuorum*65);
+        bytes memory _signatures = sliceShallow(signatures, threshold*65, totalQuorum*65);
         Isafe.checkNSignatures(txHash, data, _signatures, totalQuorum - threshold);
     }
-// |      checkTransaction      ·              -  ·            -  ·        101,778  ·             1  ·           -  │
     function checkAfterExecution(bytes32 txHash, bool success) external {
         // No action needed here
     }
@@ -192,23 +181,51 @@ abstract contract BaseTimelockGuard is BaseGuard {
             emit TransactionCanceled();
             return;
         }
-        for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
-            if(timestamp == timestamps[i]) {
-                shiftAndPop(timestamps, i);
-                emit TransactionCanceled();
-                return;
+        unchecked {
+            for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
+                if(timestamp == timestamps[i]) {
+                    shiftAndPop(timestamps, i);
+                    emit TransactionCanceled();
+                    return;
+                }
+                if(i==0)    break;
+                --i;
             }
-            if(i==0)    break;
-            unchecked { --i; }
         }
         revert CancelMisMatch(txHash);        
     }
-    function shiftAndPop(uint256[] storage arr, uint256 pos) private {
-        unchecked {
-            uint256 max = arr.length-1;
-            for(uint256 i = pos; i < max; ++i)
-                arr[i] = arr[i+1];
-            arr.pop();
+    /**
+     * @dev Removes the element at `pos` from a storage array, preserving order.
+     *      Gas cost is O(len-pos) SLOAD/SSTORE operations.
+     *      – Fast bounds-check and loop written in Yul
+     *      – Clears the tail slot for the 4 800-gas refund introduced in Istanbul
+     *      – If `pos` is the last element we only zero-out that slot and shrink length
+     */
+    function shiftAndPop(uint256[] storage arr, uint256 pos) internal {
+        assembly {
+            // Load current length
+            let len := sload(arr.slot)
+
+            // Index of the last valid element
+            let lastIdx := sub(len, 1)
+
+            // Compute the storage slot of element 0: keccak256(arrSlot)
+            mstore(0x00, arr.slot)
+            let base := keccak256(0x00, 0x20)
+
+            // two cases: removing last element vs. shifting
+            if lt(pos, lastIdx) {
+                // shift left: arr[i] = arr[i+1]  for i = pos … lastIdx-1
+                for { let i := pos } lt(i, lastIdx) { i := add(i, 1) } {
+                    sstore(add(base, i), sload(add(base, add(i, 1))))
+                }
+            }
+
+            // clear the (old) last slot
+            sstore(add(base, lastIdx), 0)
+
+            // shorten length
+            sstore(arr.slot, lastIdx)
         }
     }
 

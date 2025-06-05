@@ -8,6 +8,8 @@ The contract should be set as the guard for the given Safe wallet and can be man
 
 WARNING: setting the guard of a Safe Wallet is very sensitive, DON'T DO this if you don't know what you are doing.
 
+More details on building a Guard: [Building a Guard for Safe Smart Account](https://docs.safe.global/advanced/smart-account-guards/smart-account-guard-tutorial)
+
 ## Functionality
 
 Once in place the SafeTimelock will:
@@ -144,3 +146,9 @@ Removed throttle functionality as it
 [Version 1.3.1](https://sepolia.etherscan.io/address/0x05f0ebc08633674b063B1b6b0A0ad6Bffab1a53E)
 
 Changed field name to describe tested Safe' version and not supported
+
+[Version 1.3.2](https://sepolia.etherscan.io/address/0x37daBc6ebd85f0Ad9D8dB79993b5A1a9027Fb27a)
+
+Gas optimization:
+- Shallow slice signatures before verifying them
+- Convert to assembly ```shiftAndPop```

@@ -22,22 +22,32 @@ interface MySafe {
 }
 abstract contract BaseTimelockGuard is BaseGuard {
 
-    string public constant VERSION = "1.3.2";
+    // Use string for readability
+    string public constant VERSION = "1.3.3";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
-    error UnAuthorized(address caller, bool reason);
-    error ZerodAddess();
+    // Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
+    uint8 public constant MAX_QUEUE = 100;
+
+    error UnAuthorized(address caller, uint8 reason);
+    error ZeroAddress();
     error InvalidConfig(uint64 timelockDuration);
     error QueuingNeeded(bytes32 txHash);
     error QueuingNotNeeded(uint64 timelockDuration, uint128 limitNoTimelock, uint256 value);
     error TimeLockActive(bytes32 txHash);
     error CancelMisMatch(bytes32 txHash); 
+    error MaxQueue(bytes32 txHash);
     function checkSender() private view {
-        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, true);
+        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, 0);
     }
 
+    // Any contract that inherits from this contract must call this function
+    // - from its constructor if non upgradable
+    // - from its initialize function
+    // We do not put the  keyword 'initializer' here so that non upgradable contract can inherit from this contract
     function _initialize(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
-        if(address(_safe) == address(0)) revert ZerodAddess();
+        if(address(safe) != address(0)) revert UnAuthorized(msg.sender, 1);
+        if(address(_safe) == address(0)) revert ZeroAddress();
         setConfigHelper(timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
         safe = _safe;
     }
@@ -69,7 +79,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
             else if(selector == this.cancelTransaction.selector) {
                 if(quorumCancel == 0)
                     return;
-                if(signatures.length/65 < quorumCancel) revert UnAuthorized(executor, false);
+                if(signatures.length/65 < quorumCancel) revert UnAuthorized(executor, 2);
                 if(quorumCancel > Isafe.getThreshold())
                     checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumCancel);
                 return;
@@ -78,8 +88,8 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    // ⚠️ This function overwrites the original `signatures` array and returns a shallow slice.
-    // The original array must not be used after calling this.
+    // ⚠️ WARNING: this function overwrites the original `signatures` array and returns a shallow slice.
+    // The original array MUST NOT be used after calling this - THIS MUST BE VERIFIED FOR ALL NEW VERSIONS OF THE SAFE CONTRACT.
     function sliceShallow(bytes memory signatures, uint256 start, uint256 end) private pure returns (bytes memory result) {
         assembly {
             // Pointer to the start of the slice data
@@ -116,12 +126,12 @@ abstract contract BaseTimelockGuard is BaseGuard {
     address public safe;
     struct TimelockConfig { 
         uint64 timelockDuration;
-        uint64 throttle;
+        uint64 _deprecated;            // TODO: To be removed, only kept to keep the storage slot aligned with the previous version of the contract
         uint128 limitNoTimelock;
     }
     TimelockConfig public timelockConfig;
-    uint256 internal lastQueueTime;
-    event TimelockConfigChanged();  // Empty event to save on gas as we dont need the history. Check the field of timelockConfig for the new values
+    uint256 internal _deprecated;   // TODO: To be removed, only kept to keep the storage slot aligned with the previous version of the contract
+    event TimelockConfigChanged();  // Empty event to save on gas as we don't need the history. Check the field of timelockConfig for the new values
 
     /// Set the configuration for this timelock and allow clearings caches that may have become irrelevant due to the new configuration (this is not verified in the contract) 
     /// @param timelockDuration    Duration of timelock, 0 disables the timelock, transactions can be executed directly
@@ -152,6 +162,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
     /// @notice Using an array allow for several identical transactions to be in the queue at the same time. Timestamp are always in ascending order, and the most recent are cleared first.
     mapping(bytes32 => uint256[]) public transactions;
     
+    // No need to index anything here as the events are not used for querying. The Safe UX already displays all executed transactions.
     event TransactionQueued(bytes32 txHash); // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
     event TransactionCanceled();
     event TransactionCleared(bytes32 txHash);
@@ -163,7 +174,9 @@ abstract contract BaseTimelockGuard is BaseGuard {
         if(noTimelockNeeded(value, data, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock, value);
         bytes32 txHash = getTxHash(to, value, data, operation);
 
-        transactions[txHash].push(block.timestamp);
+        uint256[] storage timestamps = transactions[txHash];
+        if(timestamps.length == MAX_QUEUE) revert MaxQueue(txHash);
+        timestamps.push(block.timestamp);
         emit TransactionQueued(txHash);
     }
 
@@ -181,6 +194,9 @@ abstract contract BaseTimelockGuard is BaseGuard {
             emit TransactionCanceled();
             return;
         }
+        // If timestampPos == 0 and there is no match, no need to check the rest of the array, we can revert immediately
+        if(timestampPos == 0) revert CancelMisMatch(txHash);
+        // If timestampPos > 0, we can check the rest of the array for a match going backward
         unchecked {
             for(uint256 i = timestampPos-1; timestamps[i]>=timestamp; ) {
                 if(timestamp == timestamps[i]) {
@@ -200,6 +216,9 @@ abstract contract BaseTimelockGuard is BaseGuard {
      *      – Fast bounds-check and loop written in Yul
      *      – Clears the tail slot for the 4 800-gas refund introduced in Istanbul
      *      – If `pos` is the last element we only zero-out that slot and shrink length
+     *      
+     *      An attacker with queueing rights could make this very expensive by queuing up to MAX_QUEUE transactions.
+     *      However the setConfig function allows to clear the queue, which can be executed immediately provider quorumExecute is above threshold and enough signatures are provided. 
      */
     function shiftAndPop(uint256[] storage arr, uint256 pos) internal {
         assembly {
@@ -263,7 +282,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
     }
     function noTimelockNeeded( uint256 value, bytes memory data, Enum.Operation operation) private view returns (bool) {
         // We want simple ETH transfers smaller than limitNoTimelock to not require a timelock
-        return timelockConfig.timelockDuration == 0 || (operation == Enum.Operation.Call && (data.length == 0 || (data.length == 1 && data[0] == 0)) && timelockConfig.limitNoTimelock >= value);
+        return timelockConfig.timelockDuration == 0 || (operation == Enum.Operation.Call && data.length == 0 && timelockConfig.limitNoTimelock >= value);
     }
     function getTxHash(address to, uint256 value, bytes memory data, Enum.Operation operation) private pure returns (bytes32) {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
@@ -271,6 +290,6 @@ abstract contract BaseTimelockGuard is BaseGuard {
     }
     /// @notice The minimum quorum needed to cancel a queued transaction. 0 or a value below or equal the default Safe threshold means no specific quorum is needed. 
     uint8 public quorumCancel;
-    /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 disactivate direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
+    /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 de-activates direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
     uint8 public quorumExecute;
 }

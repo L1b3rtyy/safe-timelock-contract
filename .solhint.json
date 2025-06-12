@@ -1,0 +1,12 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "func-visibility": [ "warn", { "ignoreConstructors": true }],
+    "gas-struct-packing": "warn",
+    "gas-small-strings": "warn",
+    "gas-length-in-loops": "warn",
+    "gas-increment-by-one": "warn",
+    "no-empty-blocks": "off",
+    "no-inline-assembly": "off"
+  }
+}

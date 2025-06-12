@@ -7,6 +7,6 @@ import { BaseTimelockGuard } from "./BaseTimelockGuard.sol";
 contract TimelockGuardUpgradeableHack is BaseTimelockGuard {
 
     function initialize(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) public {
-        super._initialize(_safe, timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
+        _initialize(_safe, timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
     }
 }

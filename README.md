@@ -54,15 +54,62 @@ Compilation
 npx hardhat compile
 ```
 
-Test coverage
+### Test coverage
+
+```solidity-coverage``` is used
+
 ```
 npx hardhat coverage
-``` 
+```
 
-Gas usage
+```
+File                               |  % Stmts | % Branch |  % Funcs |  % Lines |Uncovered Lines |
+-----------------------------------|----------|----------|----------|----------|----------------|
+ contracts\                        |      100 |      100 |      100 |      100 |                |
+  BaseTimelockGuard.sol            |      100 |      100 |      100 |      100 |                |
+  TimelockGuard.sol                |      100 |      100 |      100 |      100 |                |
+  TimelockGuardUpgradeable.sol     |      100 |      100 |      100 |      100 |                |
+  TimelockGuardUpgradeableHack.sol |      100 |      100 |      100 |      100 |                |
+-----------------------------------|----------|----------|----------|----------|----------------|
+All files                          |      100 |      100 |      100 |      100 |                |
+```
+
+### Gas usage
+
+```hardhat-gas-reporter``` is used
+
 ```
 npx hardhat test
 ```
+
+### Mutation Testing
+
+```@morenabarboni/sumo``` is used
+
+To make test execution faster:
+- Disable ```hardhat-gas-reporter``` in ```hardhat.config.cjs``` with
+```javascript
+  gasReporter: {
+    enabled: false,
+    ...
+  },
+  ...
+```
+- Set ```MAX_QUEUE``` in ```contracts\BaseTimelockGuard.sol``` to a lower value such as ```10```, and update the corresponding test case in ```test\TimelockGuard.js```.
+
+To make sure all tests pass without mutations run
+```
+npx sumo pretest
+```
+
+Then run the mutation testing:
+```
+npx sumo test
+```
+
+Only false positive are left.
+
+Note: due to the project using ESM Javascript modules by default the configuration file has to be renamed ```sumo-config.cjs``` with the ```cjs``` extension. And a few files in the library needs to be updated to import this file instead of the original one. Check the errors on first run. 
 
 ## Contract Deployment and Verification 
 
@@ -73,7 +120,7 @@ The deployment scripts will log to the console the deployed contract addresses
 ### Setup ```secrets.json```
 
 The scripts load sensitive data from a file ```secrets.json```. It should contain:
-```
+```javascript
 {
   "safeAddress"                 // Mandatory  Address of the Safe wallet
   "proxyAddress"                // Optional   Address of the proxy once deployed, used for upgrades
@@ -117,6 +164,22 @@ Verify implementation (the proxy and proxy admin are automatically verified)
 npx hardhat verify --network sepolia {{ImpAddress}}
 ```
 
+## Static analysis
+
+### LLM
+
+This contract has seen some back and force with chatGPT and Claude to fix obvious issues
+
+### [Slither](https://github.com/crytic/slither)
+
+```
+py -m slither .\contracts\BaseTimelockGuard.sol --solc-remaps @safe-global=node_modules/@safe-global
+```
+
+No relevant warning lefts
+
+### [solhint](https://github.com/protofire/solhint)
+
 ## Deployed Implementations for Upgradable Contracts
 
 [Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
@@ -152,3 +215,9 @@ Changed field name to describe tested Safe' version and not supported
 Gas optimization:
 - Shallow slice signatures before verifying them
 - Convert to assembly ```shiftAndPop```
+
+[Version 1.3.3](https://sepolia.etherscan.io/address/0x326CDb9fEA2A4722988Fa36d97398D6eB8033B6c)
+
+- Added mutation testing and static analysis
+- Various small tweaks.
+- Simplification of the cancelTransaction function as transactions must be in order according to the Safe's nonce.

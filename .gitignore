@@ -4,6 +4,7 @@ node_modules
 /.openzeppelin
 Cookbook.txt
 .vscode
+sumo
 
 # Hardhat files
 /cache

@@ -25,7 +25,8 @@
     "hardhat": "^2.24.0",
     "hardhat-dependency-compiler": "^1.2.1",
     "hardhat-gas-reporter": "^2.2.3",
-    "solidity-coverage": "^0.8.16"
+    "solidity-coverage": "^0.8.16",
+    "@morenabarboni/sumo": "^3.2.1"
   },
   "overrides": {
     "@safe-global/safe-contracts": {

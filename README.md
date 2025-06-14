@@ -21,7 +21,7 @@ Main configuration parameters are:
 
 - ```timelockDuration```: duration of the timelock in seconds, 0 disables the timelock
 
-- ```throttle```: duration enforced between queued transaction, 0 disables this feature. This prevents a Safe from being DoS if the owners are compromised, by continuously consuming available nonce. Allows for an emergency change of owner with #signatures = ```quorumExecute``` > threshold. (see parameter below)
+- ```throttle```: duration enforced between queued transaction, 0 disables this feature. This prevents a Safe from being DoS if the owners are compromised, by continuously consuming available nonce. Allows for an emergency change of owner with ```#signatures = quorumExecute > threshold```. (See ```quorumExecute``` below)
 
 - ```limitNoTimelock```: limit in Wei under which a simple transfer is allowed without timelock, 0 disables this feature
 

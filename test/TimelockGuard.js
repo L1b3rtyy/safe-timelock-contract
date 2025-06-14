@@ -14,6 +14,8 @@ const txHash100 = "0x8b132efbd47825da4986d3581f78eddc4865866e7626f34fbe0c14c9a4d
 const quorumCancel = 2, quorumExecute = 3;
 const executor = toAdd[0];
 
+const UNAUTHORIZED_REASONS = {SENDER:0, REINITIALIZE:1, SIGNATURES:2, DATA:3};
+
 describe('TimelockGuardUpgradeable', function () { 
   it('initialize', async function () {
     const [safe, other] = await ethers.getSigners();
@@ -79,7 +81,7 @@ describe('BaseTimelockGuard', function () {
 
     await expect(
       timelockGuard.initialize(other.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
-    ).to.be.revertedWith("UnAuthorized").withArgs(safe.address, 1);
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.address, UNAUTHORIZED_REASONS.REINITIALIZE);
   });
   it('queueTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
@@ -112,7 +114,7 @@ describe('BaseTimelockGuard', function () {
     ).to.be.revertedWith("QueuingNotNeeded").withArgs(timelockDuration, limitNoTimelock);
     await expect(
       timelockGuard.connect(owner1).queueTransaction(toAdd[0], limitNoTimelock+1, "0x", 0)
-    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
+    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, UNAUTHORIZED_REASONS.SENDER);
     consoleLog("Queueing with value below the limit but different operation");
     await time.increase(2*throttle);
     await expect(
@@ -157,7 +159,7 @@ describe('BaseTimelockGuard', function () {
     consoleLog("Canceling as non Safe");
     await expect(
       timelockGuard.connect(owner1).cancelTransaction(txHash100, 0, 0)
-    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
+    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, UNAUTHORIZED_REASONS.SENDER);
     consoleLog("Canceling a transaction for which no hash is in the queued");
     await expect(
       timelockGuard.cancelTransaction(txHash100, 0, 0)
@@ -249,7 +251,7 @@ describe('BaseTimelockGuard', function () {
     consoleLog("Calling as non Safe");
     await expect(
       timelockGuard.connect(owner1).setConfig(20, throttle, limitNoTimelock, 0, 100, [])
-    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
+    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, UNAUTHORIZED_REASONS.SENDER);
     consoleLog("Setting timelockDuration above the limit");
     const maxLimitNoTimelock = 1209600;
     await expect(
@@ -427,7 +429,7 @@ describe('BaseTimelockGuard', function () {
 
     await expect(
       timelockGuard.checkTransaction(timelockGuard.address, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
-    ).to.be.revertedWith("UnAuthorized").withArgs(executor, 3);
+    ).to.be.revertedWith("UnAuthorized").withArgs(executor, UNAUTHORIZED_REASONS.DATA);
 
     const txHash = await queueTransaction(timelockGuard, to, value, data);
     await expect(
@@ -436,7 +438,7 @@ describe('BaseTimelockGuard', function () {
     await time.increase(timelockDuration+1);
     await expect(
       timelockGuard.connect(owner1).checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
-    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
+    ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, UNAUTHORIZED_REASONS.SENDER);
     await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
 
     const configData = buildData("setConfig", [timelockDuration, throttle, limitNoTimelock, 1, 2, []]);
@@ -453,12 +455,12 @@ describe('BaseTimelockGuard', function () {
     ).to.emit(timelockGuard, "TimelockConfigChanged");
     await expect(
       timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
-    ).to.be.revertedWith("UnAuthorized").withArgs(executor, 2);
+    ).to.be.revertedWith("UnAuthorized").withArgs(executor, UNAUTHORIZED_REASONS.SIGNATURES);
 
     consoleLog("Interaction with the guard and data.length==3");
     await expect(
       timelockGuard.checkTransaction(timelockGuard.address, 1000, "0x112233", 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
-    ).to.be.revertedWith("UnAuthorized").withArgs(executor, 3);
+    ).to.be.revertedWith("UnAuthorized").withArgs(executor, UNAUTHORIZED_REASONS.DATA);
 
     consoleLog("Interaction with the guard and data.length==4, testing various selectors");
     const iface = new ethers.utils.Interface(CompiledGuard.abi)
@@ -576,7 +578,7 @@ describe("End To End", function () {
     consoleLog("Cancelling with #signers = threshold < quorumCancel");
     await expect(
       execTransaction(requiredSigners, safe, guard.address, 0, cancelData)
-    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, 2);
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.SIGNATURES);
     consoleLog("Cancelling with #signers = quorumCancel > threshold but non owners (=" + others.last.address + ")");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), others.last], safe, guard.address, 0, cancelData)
@@ -644,7 +646,7 @@ describe("End To End", function () {
     await time.increase(timelockDuration + 1);
     await expect(
       execTransaction(requiredSigners, safe, ...rawTxData)
-    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, 3);
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.DATA);
     
     consoleLog("Direct send to the guard from the Safe with #signers = quorumExecute > threshold");
     await expect(
@@ -674,7 +676,7 @@ describe("End To End", function () {
 
     await expect(
       execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0), 0, true)
-    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, 2);
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.SIGNATURE);
   }); 
 })
 async function getEnd2EndCancelData(txHash, position) {

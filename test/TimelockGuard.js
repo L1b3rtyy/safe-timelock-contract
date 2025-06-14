@@ -3,15 +3,16 @@ import hardhat from 'hardhat';
 const { ethers } = hardhat;
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { execTransaction, getSafe, ZeroAddress, getSignatures } from "./utils/utils.js";
+import CompiledGuard from "../artifacts/contracts/BaseTimelockGuard.sol/BaseTimelockGuard.json" with { type: "json"}
 
 const consoleLog = () => {};  // Set to console.log to enable
 
 const toRoot = "0x000000000000000000000000000000000000000";
 const toAdd = [toRoot + 2, toRoot + 3, toRoot + 4, toRoot + 5]
-const timelockDuration = 30, limitNoTimelock = 10;
+const timelockDuration = 30, throttle = 5, limitNoTimelock = 10;
 const txHash100 = "0x8b132efbd47825da4986d3581f78eddc4865866e7626f34fbe0c14c9a4d50cea";
 const quorumCancel = 2, quorumExecute = 3;
-const safeTxGas = 0, baseGas = 0, gasPrice = 0;
+const executor = toAdd[0];
 
 describe('TimelockGuardUpgradeable', function () { 
   it('initialize', async function () {
@@ -21,47 +22,47 @@ describe('TimelockGuardUpgradeable', function () {
     await timelockGuard.deployed();
 
     await expect(
-      timelockGuard.initialize(ZeroAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute)
+      timelockGuard.initialize(ZeroAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
     ).to.be.revertedWith("ZeroAddress");
 
-    await timelockGuard.initialize(safe.address, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute);
+    await timelockGuard.initialize(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute);
 
     await expect(
-      timelockGuard.initialize(other.address, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute)
+      timelockGuard.initialize(other.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
     ).to.be.revertedWith("InvalidInitialization");
   });
 })
 describe('TimelockGuard', function () { 
-    it('constructor', async function () {
-      const [safe] = await ethers.getSigners();
-      const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
-      
-      await expect(
-        TimelockGuard.deploy(ZeroAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute).then(timelockGuard => timelockGuard.deployed())
-      ).to.be.revertedWith("ZeroAddress");
-  
-      const timelockGuard = await TimelockGuard.deploy(safe.address, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute);
-      await timelockGuard.deployed();
+  it('constructor', async function () {
+    const [safe] = await ethers.getSigners();
+    const TimelockGuard = await ethers.getContractFactory("TimelockGuard");
+    
+    await expect(
+      TimelockGuard.deploy(ZeroAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute).then(timelockGuard => timelockGuard.deployed())
+    ).to.be.revertedWith("ZeroAddress");
 
-      const isVersion = str => {
-        const parts = str.split(".");
-        if(parts.length != 3)
+    const timelockGuard = await TimelockGuard.deploy(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute);
+    await timelockGuard.deployed();
+
+    const isVersion = str => {
+      const parts = str.split(".");
+      if(parts.length != 3)
+        return false;
+      for(let i=0; i < parts.length; i++) {
+        const temp = Number.parseInt(parts[i]);
+        if(isNaN(temp) || temp < 0)
           return false;
-        for(let i=0; i < parts.length; i++) {
-          const temp = Number.parseInt(parts[i]);
-          if(isNaN(temp) || temp < 0)
-            return false;
-        }
-        return true;
       }
-      const version = await timelockGuard.VERSION()
-      assert.isTrue(isVersion(version), "Invalid version=" + version);
+      return true;
+    }
+    const version = await timelockGuard.VERSION()
+    assert.isTrue(isVersion(version), "Invalid version=" + version);
 
-      const testedSafeVersion = await timelockGuard.TESTED_SAFE_VERSIONS();
-      const parts = testedSafeVersion.split("|");
-      for(const part of parts)
-        assert.isTrue(isVersion(part), "Invalid version part=" + part);
-    });
+    const testedSafeVersion = await timelockGuard.TESTED_SAFE_VERSIONS();
+    const parts = testedSafeVersion.split("|");
+    for(const part of parts)
+      assert.isTrue(isVersion(part), "Invalid version part=" + part);
+  });
 })
 describe('BaseTimelockGuard', function () { 
   it('initialize', async function () {
@@ -71,54 +72,87 @@ describe('BaseTimelockGuard', function () {
     await timelockGuard.deployed();
 
     await expect(
-      timelockGuard.initialize(ZeroAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute)
+      timelockGuard.initialize(ZeroAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
     ).to.be.revertedWith("ZeroAddress");
 
-    await timelockGuard.initialize(safe.address, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute);
+    await timelockGuard.initialize(safe.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute);
 
     await expect(
-      timelockGuard.initialize(other.address, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute)
+      timelockGuard.initialize(other.address, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute)
     ).to.be.revertedWith("UnAuthorized").withArgs(safe.address, 1);
   });
   it('queueTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
 
-    consoleLog("QueuingNotNeeded with value lower than the limit");
-    await expect(
-      timelockGuard.queueTransaction(toAdd[0], 1, "0x", 0)
-    ).to.be.revertedWith("QueuingNotNeeded");
-    consoleLog("QueuingNotNeeded with value equal to the limit");
-    await expect(
-      timelockGuard.queueTransaction(toAdd[0], limitNoTimelock, "0x", 0)
-    ).to.be.revertedWith("QueuingNotNeeded");
-    consoleLog("Queueing with value above the limit");
+    consoleLog("Queueing with value just above the limit");
     await expect(
       timelockGuard.queueTransaction(toAdd[0], limitNoTimelock+1, "0x", 0)
     ).to.emit(timelockGuard, "TransactionQueued");
+    consoleLog("Throttled just after queueing");
+    const lastQueueTime = await time.latest();
+    const blockTimestamp = lastQueueTime + 2;
+    await time.setNextBlockTimestamp(blockTimestamp);
+    await expect(
+      timelockGuard.queueTransaction(toAdd[0], limitNoTimelock+2, "0x", 0)
+    ).to.be.revertedWith("Throttled").withArgs(blockTimestamp, lastQueueTime, throttle);
+    consoleLog("Queueing after exactly the throttle time");
+    await time.increase(throttle-1);
+    await expect(
+      timelockGuard.queueTransaction(toAdd[0], limitNoTimelock+2, "0x", 0)
+    ).to.emit(timelockGuard, "TransactionQueued");
+
+    await time.increase(throttle);
+    consoleLog("QueuingNotNeeded with value lower than the limit");
+    await expect(
+      timelockGuard.queueTransaction(toAdd[0], 1, "0x", 0)
+    ).to.be.revertedWith("QueuingNotNeeded").withArgs(timelockDuration, limitNoTimelock);
+    consoleLog("QueuingNotNeeded with value equal to the limit");
+    await expect(
+      timelockGuard.queueTransaction(toAdd[0], limitNoTimelock, "0x", 0)
+    ).to.be.revertedWith("QueuingNotNeeded").withArgs(timelockDuration, limitNoTimelock);
     await expect(
       timelockGuard.connect(owner1).queueTransaction(toAdd[0], limitNoTimelock+1, "0x", 0)
     ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
     consoleLog("Queueing with value below the limit but different operation");
+    await time.increase(2*throttle);
     await expect(
       timelockGuard.queueTransaction(toAdd[0], 1, "0x", 1)
     ).to.emit(timelockGuard, "TransactionQueued");
 
+    consoleLog("Verifying hash function")
+    const queueData = [toAdd[0], 1, "0x01", 0]
+    const txHash = await queueTransaction(timelockGuard, ...queueData);
+    consoleLog("Verifying hash function, txHash=" + txHash);
+    const getTxHash = (to, value, data, operation) => {
+      // 1) Pack exactly like `abi.encodePacked(to, value, data, operation)`
+      const packed = ethers.utils.solidityPack(
+        ["address", "uint256", "bytes", "uint8"],
+        [to, value, data, operation]
+      );
+      // 2) keccak256 it:
+      return ethers.utils.keccak256(packed);
+    }
+    assert.equal(txHash, getTxHash(...queueData), "invalid hash");
+
     consoleLog("Testing MAX_QUEUE");
     const MAX_QUEUE = await timelockGuard.MAX_QUEUE();
     assert.equal(MAX_QUEUE, 100, "invalid MAX_QUEUE=" + MAX_QUEUE);
-    const txHash = await queueTransaction(timelockGuard, toAdd[0], 1, "0x01", 0)
-    for(let i=1; i<MAX_QUEUE; i++)
+    consoleLog("Queueing up to MAX_QUEUE");
+    for(let i=1; i<MAX_QUEUE; i++) {
+      await time.increase(2*throttle);
       await expect(
         timelockGuard.queueTransaction(toAdd[0], 1, "0x01", 0)
-      ).to.emit(timelockGuard, "TransactionQueued");
-
+      ).to.emit(timelockGuard, "TransactionQueued").withArgs(txHash);
+    }
+    consoleLog("Queueing above MAX_QUEUE");
+    await time.increase(2*throttle);
     await expect(
       timelockGuard.queueTransaction(toAdd[0], 1, "0x01", 0)
-    ).to.be.revertedWith("MaxQueue").withArgs(txHash);
+    ).to.be.revertedWith("MaxQueue");
   });
   it('cancelTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
-    const to = toAdd[0], value = 11, data = "0x", operation = 0;
+    const to = toAdd[0], value = 11, data = "0x";
 
     consoleLog("Canceling as non Safe");
     await expect(
@@ -130,44 +164,43 @@ describe('BaseTimelockGuard', function () {
     ).to.be.revertedWith("CancelMisMatch");
 
     consoleLog("Queue and cancel - happy case");
-    const hash = await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x", 0);
+    const hash = await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x");
     const txs = await getTransactions(timelockGuard, hash); 
     assert.equal(txs.length, 1, "Queue and cancel - happy case - #=" + txs.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 0, txs[0])
-    ).to.emit(timelockGuard, "TransactionCanceled");
+    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
     const txsAfter = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter.length, 0, "Queue and cancel - happy case - no more timestamp, #=" + txsAfter.length);
 
     consoleLog("Queue 2 and cancel - happy case");
-    await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x", 0);
-    await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x", 0);
+    await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x");
+    await queueTransaction(timelockGuard, to, limitNoTimelock+1, "0x");
     const txs2 = await getTransactions(timelockGuard, hash); 
     assert.equal(txs2.length, 2, "Queue 2 and cancel - happy case - #=" + txs2.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 1, txs2[1])
-    ).to.emit(timelockGuard, "TransactionCanceled");
+    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
     const txsAfter1 = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter1.length, 1, "Queue 2 and cancel 1 - happy case - #=" + txsAfter1.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 0, txs2[0])
-    ).to.emit(timelockGuard, "TransactionCanceled");
+    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
     const txsAfter2 = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter2.length, 0, "Queue 2 and cancel 2 - happy case - #=" + txsAfter2.length);
 
-    const rawData0 = [to, value, data, operation];
-    const rawData1 = [to, value+1, data, operation];
+    const rawData1 = [to, value+1, data];
     const txHash = [];
     txHash[0] = await queueTransaction(timelockGuard, ...rawData1);
     const nbSameTx = 5;
     for(let i=1; i<nbSameTx+1; i++) {
-      txHash[i] = await queueTransaction(timelockGuard, ...rawData0);
+      txHash[i] = await queueTransaction(timelockGuard, to, value, data);
       await time.increase(2); // Ensure different timestamps
       assert.isTrue(i==1 || txHash[i]==txHash[1], "Queue severals transactions with same hash");
     }
     txHash[nbSameTx+1] = await queueTransaction(timelockGuard, ...rawData1);
     assert.equal(txHash[0], txHash[nbSameTx+1], "Queue 2 transactions with same hash");
-    txHash[nbSameTx+2] = await queueTransaction(timelockGuard, to, value+2, data, operation);
+    txHash[nbSameTx+2] = await queueTransaction(timelockGuard, to, value+2, data);
 
     consoleLog("Cancelling transaction where timestamp does not exist");
     await expect(
@@ -215,31 +248,40 @@ describe('BaseTimelockGuard', function () {
 
     consoleLog("Calling as non Safe");
     await expect(
-      timelockGuard.connect(owner1).setConfig(20, limitNoTimelock, 0, 100, [])
+      timelockGuard.connect(owner1).setConfig(20, throttle, limitNoTimelock, 0, 100, [])
     ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
     consoleLog("Setting timelockDuration above the limit");
-    await expect(
-      timelockGuard.setConfig(120960000, limitNoTimelock, 0, 100, [])
-    ).to.be.revertedWith("InvalidConfig").withArgs(120960000)
-    consoleLog("Setting timelockDuration right above the limit");
     const maxLimitNoTimelock = 1209600;
     await expect(
-      timelockGuard.setConfig(maxLimitNoTimelock+1, limitNoTimelock, 0, 100, [])
-    ).to.be.revertedWith("InvalidConfig").withArgs(maxLimitNoTimelock+1);
-    consoleLog("Setting timelockDuration to the limit");
+      timelockGuard.setConfig(maxLimitNoTimelock*10, throttle, limitNoTimelock, 0, 100, [])
+    ).to.be.revertedWith("InvalidConfig")
+    consoleLog("Setting timelockDuration right above the limit");
     await expect(
-      timelockGuard.setConfig(maxLimitNoTimelock, limitNoTimelock, 0, 100, [])
+      timelockGuard.setConfig(maxLimitNoTimelock+1, throttle, limitNoTimelock, 0, 100, [])
+    ).to.be.revertedWith("InvalidConfig");
+    consoleLog("Setting throttle above the limit");
+    const maxThrottle = 3600;
+    await expect(
+      timelockGuard.setConfig(timelockDuration, maxThrottle*10, limitNoTimelock, 0, 100, [])
+    ).to.be.revertedWith("InvalidConfig")
+    consoleLog("Setting timelockDuration right above the limit");
+    await expect(
+      timelockGuard.setConfig(timelockDuration, maxThrottle+1, limitNoTimelock, 0, 100, [])
+    ).to.be.revertedWith("InvalidConfig");
+    consoleLog("Setting timelockDuration and throttle to the limit");
+    await expect(
+      timelockGuard.setConfig(maxLimitNoTimelock, maxThrottle, limitNoTimelock, 0, 100, [])
     ).to.emit(timelockGuard, "TimelockConfigChanged");
-    consoleLog("Normal");
+    consoleLog("Back to normal");
     await expect(
-      timelockGuard.setConfig(20, 5, 0, 100, [])
+      timelockGuard.setConfig(20, 3, 5, 0, 100, [])
     ).to.emit(timelockGuard, "TimelockConfigChanged");
     
-    const to1 = toAdd[0], to2 = toAdd[1], value = 11, data = "0x", operation = 0;
-    const txHash1 = await queueTransaction(timelockGuard, to1, value, data, operation);
-    await queueTransaction(timelockGuard, to1, value, data, operation);
-    await queueTransaction(timelockGuard, to1, value, data, operation);
-    const txHash2 = await queueTransaction(timelockGuard, to2, value, data, operation);
+    const to1 = toAdd[0], to2 = toAdd[1], value = 11, data = "0x";
+    const txHash1 = await queueTransaction(timelockGuard, to1, value, data);
+    await queueTransaction(timelockGuard, to1, value, data);
+    await queueTransaction(timelockGuard, to1, value, data);
+    const txHash2 = await queueTransaction(timelockGuard, to2, value, data);
 
     const txs1 = await getTransactions(timelockGuard, txHash1);
     const timestampPos = 1;
@@ -250,7 +292,7 @@ describe('BaseTimelockGuard', function () {
     const txs2 = await getTransactions(timelockGuard, txHash2);
 
     await expect(
-      timelockGuard.setConfig(25, 8, 0, 100, [txHash1, txHash2])
+      timelockGuard.setConfig(25, 4, 8, 0, 100, [txHash1, txHash2])
     ).to.emit(timelockGuard, "TimelockConfigChanged").to.emit(timelockGuard, "TransactionsCleared");
     consoleLog("Cancelling already cleared transactions");
     await expect(
@@ -261,147 +303,175 @@ describe('BaseTimelockGuard', function () {
     ).to.be.revertedWith("CancelMisMatch");
     
     await expect(
-      timelockGuard.setConfig(0, 5, 0, 100, [])
+      timelockGuard.setConfig(0, 3, 5, 0, 100, [])
     ).to.not.emit(timelockGuard, "TransactionsCleared");
     await expect(
-      timelockGuard.queueTransaction(to1, value, data, operation)
-    ).to.be.revertedWith("QueuingNotNeeded");
+      timelockGuard.queueTransaction(to1, value, data, 0)
+    ).to.be.revertedWith("QueuingNotNeeded").withArgs(0, 5)
   });  
   it('validateAndMarkExecuted', async function () {
     const [timelockGuard] = await init();
-    const to = toAdd[0], value = 11, data = "0x", operation = 0;
-    const signatures = [], executor = toAdd[0];
+    const to = toAdd[0], value = 11, data = "0x";
 
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("QueuingNeeded");
-    await timelockGuard.checkTransaction(to, 1, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor);
+    await timelockGuard.checkTransaction(to, 1, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
 
     consoleLog("Executing within timelock and then after waiting for well over timelockDuration");
     await expect(
-      timelockGuard.queueTransaction(to, value, data, operation)
+      timelockGuard.queueTransaction(to, value, data, 0)
     ).to.emit(timelockGuard, "TransactionQueued");
 
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("TimeLockActive");
 
     await time.increase(2*timelockDuration);
 
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.not.emit(timelockGuard, "TransactionCleared");
 
     consoleLog("Executing after waiting exactly timelockDuration");
     await expect(
-      timelockGuard.queueTransaction(to, value, data, operation)
+      timelockGuard.queueTransaction(to, value, data, 0)
     ).to.emit(timelockGuard, "TransactionQueued");
 
     await time.increase(timelockDuration-1);
 
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted");
 
     consoleLog("Executing with several tx in the queue and latest one after waiting exactly timelockDuration");
     await expect(
-      timelockGuard.queueTransaction(to, value, data, operation)
+      timelockGuard.queueTransaction(to, value, data, 0)
     ).to.emit(timelockGuard, "TransactionQueued");
     await time.increase(2);
-    const txHash = await queueTransaction(timelockGuard, to, value, data, operation);
+    const txHash = await queueTransaction(timelockGuard, to, value, data);
     const txs = await getTransactions(timelockGuard, txHash);
     await time.increase(timelockDuration+1-2);
 
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted").withArgs(txHash, txs[1]);
     txs.pop();
     const txsAfter = await getTransactions(timelockGuard, txHash);
     assert.equal(txs.toString(), txsAfter.toString(), "compare txs vs txsAfter");
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted").withArgs(txHash, txsAfter[0]);
 
     const timeReset = 2000000000;
     await time.increaseTo(timeReset+9);
 
+    consoleLog("Queueing and Execution deep check 1");
     // executesAfter = [10, 30], time = 70 => expected = [10]
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 10
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 10
     await time.increaseTo(timeReset+29);
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 30
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 30
     await time.increaseTo(timeReset+68);
     await expect(                                                                      // t = 70
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted").withNamedArgs({ txHash });
     await checkExecuteAfter(timelockGuard, timeReset, txHash, [10], "check1");
     
+    consoleLog("Queueing and Execution deep check 2");
     // executesAfter = [10, 70], time = 90 => expected = [70] 
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 70
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 70
     await time.increaseTo(timeReset+89);
     await expect(                                                                      // t = 90
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted").withNamedArgs({ txHash });
     await checkExecuteAfter(timelockGuard, timeReset, txHash, [70], "check2");
     
+    consoleLog("Queueing and Execution deep check 3");
     // executesAfter = [70, 90, 107, 124], time = 124 => expected = [70, 107, 124] 
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 90
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 90
     await time.increaseTo(timeReset+106);
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 107
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 107
     await time.increaseTo(timeReset+123);
-    await timelockGuard.queueTransaction(to, value, data, operation)                   // t = 124
+    await timelockGuard.queueTransaction(to, value, data, 0)                   // t = 124
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionExecuted").withNamedArgs({ txHash });
     await checkExecuteAfter(timelockGuard, timeReset, txHash, [70, 107, 124], "check3");
 
+    consoleLog("Setting timelock to 0 and executing = clearing hash");
     await expect(
-      timelockGuard.setConfig(0, 5, 0, 100, [])
+      timelockGuard.setConfig(0, 3, 5, 0, 100, [])
     ).to.emit(timelockGuard, "TimelockConfigChanged");
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.emit(timelockGuard, "TransactionCleared").withArgs(txHash);
-
     const txsAfter2 = await timelockGuard.getTransactions(txHash);
     assert.equal(txsAfter2.length, 0, "TransactionCleared - no more timestamp, #=" + txsAfter.length);
 
+    consoleLog("Clearing hash again");
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.not.emit(timelockGuard, "TransactionCleared");
+
+    consoleLog("QueuingNeeded with hash");
+    await expect(
+      timelockGuard.setConfig(10, 3, 5, 0, 100, [])
+    ).to.emit(timelockGuard, "TimelockConfigChanged");
+    await expect(
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
+    ).to.be.revertedWith("QueuingNeeded").withArgs(txHash);
   });
   it('checkTransaction', async function () {
     const [timelockGuard, safe, owner1] = await init();
-    const to = toAdd[0], value = 11, data = "0x", operation = 0;
-    const signatures = [], executor = toAdd[0];
+    const to = toAdd[0], value = 11, data = "0x"
 
     await expect(
-      timelockGuard.checkTransaction(timelockGuard.address, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(timelockGuard.address, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("UnAuthorized").withArgs(executor, 3);
 
-    const txHash = await queueTransaction(timelockGuard, to, value, data, operation);
+    const txHash = await queueTransaction(timelockGuard, to, value, data);
     await expect(
-      timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("TimeLockActive").withArgs(txHash);
     await time.increase(timelockDuration+1);
     await expect(
-      timelockGuard.connect(owner1).checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.connect(owner1).checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("UnAuthorized").withArgs(owner1.address, 0);
-    await timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor);
+    await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
 
-    const configData = buildData("setConfig", [timelockDuration, limitNoTimelock, 1, 2, []]);
+    const configData = buildData("setConfig", [timelockDuration, throttle, limitNoTimelock, 1, 2, []]);
     await expect(
-      timelockGuard.checkTransaction(timelockGuard.address, 0, configData, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(timelockGuard.address, 0, configData, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("QueuingNeeded");
 
     const queueData = buildData("queueTransaction", [to, value, data, 0]);
-    await timelockGuard.checkTransaction(timelockGuard.address, value, queueData, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor);
+    await timelockGuard.checkTransaction(timelockGuard.address, value, queueData, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
     const cancelData = buildData("cancelTransaction", [txHash, 0, 0]);
-    await timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor);
+    await timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
     await expect(
-      timelockGuard.setConfig(timelockDuration, limitNoTimelock, 1, 2, [])
+      timelockGuard.setConfig(timelockDuration, throttle, limitNoTimelock, 1, 2, [])
     ).to.emit(timelockGuard, "TimelockConfigChanged");
     await expect(
-      timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor)
+      timelockGuard.checkTransaction(timelockGuard.address, value, cancelData, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
     ).to.be.revertedWith("UnAuthorized").withArgs(executor, 2);
+
+    consoleLog("Interaction with the guard and data.length==3");
+    await expect(
+      timelockGuard.checkTransaction(timelockGuard.address, 1000, "0x112233", 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
+    ).to.be.revertedWith("UnAuthorized").withArgs(executor, 3);
+
+    consoleLog("Interaction with the guard and data.length==4, testing various selectors");
+    const iface = new ethers.utils.Interface(CompiledGuard.abi)
+    const selectorQueueTransaction = parseInt(iface.getSighash('queueTransaction'), 16)
+    const selectorCancelTransaction = parseInt(iface.getSighash('cancelTransaction'), 16)
+    const selectors = [parseInt(iface.getSighash('setConfig'), 16),
+      parseInt(iface.getSighash('checkTransaction'), 16),
+      parseInt(iface.getSighash('checkAfterExecution'), 16),
+      selectorQueueTransaction-1,selectorQueueTransaction+1,selectorCancelTransaction-1,selectorCancelTransaction+1].map(x=>x.toString(16));
+    for(const selector of selectors)
+    await expect(
+      timelockGuard.checkTransaction(timelockGuard.address, 1000, "0x" + selector, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
+    ).to.be.revertedWith("QueuingNeeded");
   });  
   it('checkAfterExecution', async function () {
     const [timelockGuard] = await init();
@@ -412,15 +482,15 @@ describe('BaseTimelockGuard', function () {
   it('change timelockDuration', async function () {
     const [timelockGuard] = await init(1000);
 
-    const to = toAdd[0], value = 11, data = "0x", operation = 0;
-    const txHash = await queueTransaction(timelockGuard, to, value, data, operation);
+    const to = toAdd[0], value = 11, data = "0x";
+    const txHash = await queueTransaction(timelockGuard, to, value, data);
     const newTimelockDuration = 10;
 
     await expect(
-      timelockGuard.setConfig(newTimelockDuration, limitNoTimelock, 0, 100, [])
+      timelockGuard.setConfig(newTimelockDuration, throttle, limitNoTimelock, 0, 100, [])
     ).to.emit(timelockGuard, "TimelockConfigChanged");
     
-    await queueTransaction(timelockGuard, to, value, data, operation);
+    await queueTransaction(timelockGuard, to, value, data);
 
     time.increase(newTimelockDuration+1);
 
@@ -428,14 +498,13 @@ describe('BaseTimelockGuard', function () {
     const latest = await time.latest()
     assert.isTrue(transactions[1]<latest, "Confirm latest transactions can be executed");
 
-    const signatures = [], executor = toAdd[0];
-    await timelockGuard.checkTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, ZeroAddress, ZeroAddress, signatures, executor);
+    await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
   });  
 });
 describe("End To End", function () {
   const threshold = 2, quorumCancel = 4, quorumExecute = 6, nbOwners = 8;
   it('Queuing and executing a transaction after the timelock', async function () {
-    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute]);
+    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
     const requiredSigners = owners.slice(0, threshold);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
@@ -460,8 +529,29 @@ describe("End To End", function () {
   }); 
   runTest_quorumExecute(threshold, quorumCancel, quorumExecute, nbOwners);
   runTest_quorumExecute(1, quorumCancel, quorumExecute, nbOwners);
+  it('Execute a transaction directly with quorumExecute > threshold - to optimize checkNSignatures', async function () {
+    // This test is used to optimized the gas usage of the checkNSignatures function, which is not properly calculated if the guard is called from the Safe contract.
+    const { owners, safe, others, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
+    const to = toAdd[0], value = 11, data = "0x";
+
+    await owners[0].sendTransaction({to: safe.address, value: 1000000000000000});
+    assert.equal(await ethers.provider.getBalance(safe.address), 1000000000000000, "Check safe balance - before execution");
+
+    consoleLog("direct execute with #signers = threshold < quorumExecute");
+    await expect(
+      checkTransaction(owners.slice(0, threshold), to, value, data, 0, guard, safe)
+    ).to.be.revertedWith("QueuingNeeded");
+
+    consoleLog("direct execute with #signers = quorumExecute > threshold but non owners (=" + others.last.address + ")");
+    await expect(
+      checkTransaction([...owners.slice(0, quorumExecute-1), others.last], to, value, data, 0, guard, safe)
+    ).to.be.reverted;
+
+    consoleLog("direct execute with #signers = quorumExecute > threshold");
+    expect(await checkTransaction(owners.slice(0, quorumExecute), to, value, data, 0, guard, safe));
+  });
   it('Execute a transaction directly with quorumExecute = threshold', async function () {
-    const { owners, safe } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, threshold]);
+    const { owners, safe } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, threshold]);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
     assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - before execution");
@@ -473,17 +563,16 @@ describe("End To End", function () {
     ).to.be.revertedWith("QueuingNeeded");
   });
   it('Canceling a transaction with quorumCancel > threshold', async function () {
-    const { owners, safe, guard, others } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute]);
+    const { owners, safe, guard, others } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
     const requiredSigners = owners.slice(0, threshold);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
     assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - before execution");
 
     const queueData = buildData("queueTransaction", [owners[0].address, 1000, "0x", 0]);
-    const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData));
+    const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData), true);
 
-    const lastBlock = await ethers.provider.getBlock("latest");
-    const cancelData = buildData("cancelTransaction", [txHash, 0, lastBlock.timestamp]);
+    const cancelData = await getEnd2EndCancelData(txHash, 0);
     consoleLog("Cancelling with #signers = threshold < quorumCancel");
     await expect(
       execTransaction(requiredSigners, safe, guard.address, 0, cancelData)
@@ -495,33 +584,32 @@ describe("End To End", function () {
     consoleLog("Cancelling with #signers = quorumCancel > threshold");
     expect(await execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, cancelData));
 
+    consoleLog("Queuing throttled, wait and requeue");
     const queueData2 = buildData("queueTransaction", [owners[0].address, 1001, "0x", 0]);
-    const txHash2 = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData2));
-    
-    const lastBlock2 = await ethers.provider.getBlock("latest");
-    const cancelData2 = buildData("cancelTransaction", [txHash2, 0, lastBlock2.timestamp]);
+    await expect(
+      execTransaction(requiredSigners, safe, guard.address, 0, queueData2)
+    ).to.be.revertedWith("GS013");
+    time.increase(throttle*2);
+    const txHash2 = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData2), true);
 
     consoleLog("Cancelling with #signers > quorumCancel > threshold");
-    expect(await execTransaction(owners.slice(0, quorumCancel+1), safe, guard.address, 0, cancelData2));
+    expect(await execTransaction(owners.slice(0, quorumCancel+1), safe, guard.address, 0, await getEnd2EndCancelData(txHash2, 0)));
   });
   it('Canceling a transaction with quorumCancel = threshold', async function () {
-    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, threshold, quorumExecute]);
+    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, threshold, quorumExecute]);
     const requiredSigners = owners.slice(0, threshold);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
     assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - before execution");
 
-    const rawTxData = [owners[0].address, 1000, "0x", 0];
-    const queueData = buildData("queueTransaction", rawTxData);
-    const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData));
+    const queueData = buildData("queueTransaction", [owners[0].address, 1000, "0x", 0]);
+    const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData), true);
 
-    const lastBlock = await ethers.provider.getBlock("latest");
-    const cancelData = buildData("cancelTransaction", [txHash, 0, lastBlock.timestamp]);
     consoleLog("Cancelling with #signers = quorumCancel = threshold");
-    expect(await execTransaction(owners.slice(0, threshold), safe, guard.address, 0, cancelData));
+    expect(await execTransaction(owners.slice(0, threshold), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0)));
   });
   it('Removing the guard', async function () {
-    const { owners, safe, guard, masterCopy } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute]);
+    const { owners, safe, guard, masterCopy } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
     const requiredSigners = owners.slice(0, threshold);
 
     assert.equal(await getGuard(safe), guard.address, "Check guard - before removal");
@@ -541,7 +629,7 @@ describe("End To End", function () {
     assert.equal(await getGuard(safe), ZeroAddress, "Check guard - after removal");
   });
   it('Sending ETH to the guard', async function () {
-    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute]);
+    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
     const requiredSigners = owners.slice(0, threshold);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
@@ -568,7 +656,31 @@ describe("End To End", function () {
       owners[0].sendTransaction({to: guard.address, value: 10000})
     ).to.be.revertedWith("function selector was not recognized and there's no fallback nor receive function");
   });
+  it('Misc', async function () {
+    const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
+    const requiredSigners = owners.slice(0, threshold);
+
+    await owners[0].sendTransaction({to: safe.address, value: 10000});
+    assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - before execution");
+
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but with malformed signatures");
+    const rawTxData = [owners[0].address, 1000, "0x", 0];
+    await expect(
+      execTransaction(owners.slice(0, quorumExecute), safe, ...rawTxData, true)
+    ).to.be.revertedWith("QueuingNeeded");
+
+    const queueData = buildData("queueTransaction", rawTxData);
+    const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData), true);
+
+    await expect(
+      execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0), 0, true)
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, 2);
+  }); 
 })
+async function getEnd2EndCancelData(txHash, position) {
+  const lastBlock = await ethers.provider.getBlock("latest");
+  return buildData("cancelTransaction", [txHash, position, lastBlock.timestamp]);
+} 
 async function getGuard(safe) {
   return safe.getStorageAt("0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8", 1)
   .then(data => ethers.utils.getAddress("0x" + data.slice(26, 66)))
@@ -584,40 +696,41 @@ async function checkExecuteAfter(timelockGuard, timeReset, txHash, exp, log) {
   for(let i=0; i < exp.length; i++)
     assert.equal((await timelockGuard.transactions(txHash, i)).toNumber()-timeReset, exp[i], "checkExecuteAfter - " + log + ", i=" + i); 
 }
-async function queueTransaction(timelockGuard, to, value, data, operation) {
-  return getEventQueue(await timelockGuard.queueTransaction(to, value, data, operation));
+async function queueTransaction(timelockGuard, to, value, data) {
+  await time.increase(2*throttle)
+  return getEventQueue(await timelockGuard.queueTransaction(to, value, data, 0));
 }
-async function getEventQueue(tx) {
+async function getEventQueue(tx, End2End) {
   const receipt = await tx.wait();
-  assert.isTrue(Boolean(receipt && receipt.events && receipt.events.length && receipt.events[0] && receipt.events[0].data), "getEventQueue")
-  return receipt.events[0].data;
+  assert.isTrue(Boolean(receipt && receipt.events && receipt.events.length && receipt.events[0] && receipt.events[0].data), "getEventQueue") 
+  return (receipt.events[0].data != "0x" ? receipt.events[0].data : (End2End ? receipt.events[0].topics && receipt.events[0].topics[1] : receipt.events[0].args && receipt.events[0].args[0]));
 }
 async function init(_timelockDuration) {
   const [safe, owner1, owner2] = await ethers.getSigners();
   const TimelockGuard = await ethers.getContractFactory("TimelockGuardUpgradeable");
   const timelockGuard = await TimelockGuard.deploy();
   await timelockGuard.deployed();
-  await timelockGuard.initialize(safe.address, _timelockDuration || timelockDuration, limitNoTimelock, 0, 100);
+  await timelockGuard.initialize(safe.address, _timelockDuration || timelockDuration, throttle, limitNoTimelock, 0, 100);
   return [timelockGuard, safe, owner1, owner2];
 }
 function buildData(functionName, args) {
   let moduleAbi = "";
-  if(functionName == "setConfig")           moduleAbi = "function setConfig(uint64 _timelockDuration, uint128 _limitNoTimelock, uint32 _quorumCancel, uint32 _quorumExecute, bytes32[] calldata clearHashes)";
+  if(functionName == "setConfig")           moduleAbi = "function setConfig(uint64 _timelockDuration, uint64 _throttle, uint128 _limitNoTimelock, uint32 _quorumCancel, uint32 _quorumExecute, bytes32[] calldata clearHashes)";
   if(functionName == "queueTransaction")    moduleAbi = "function queueTransaction(address to, uint256 value, bytes calldata data, uint8 operation)";
   if(functionName == "cancelTransaction")   moduleAbi = "function cancelTransaction(bytes32 txHash, uint256 timestampPos, uint256 timestamp)";
   const iface = new ethers.utils.Interface([moduleAbi]);
   return iface.encodeFunctionData(functionName, args);
 }
-async function checkTransaction(wallets, to, value, data, operation, timelockGuard, safe) {
+async function checkTransaction(wallets, to, value, data, operation, timelockGuard, safe) {   // TODO
     // Get signature with a nonce increment of -1 to match the guard. Check the guard code for more details. 
-    const signatures = await getSignatures(wallets, safe, to, value, data, operation, -1);
+    const sign = await getSignatures(wallets, safe, to, value, data, 0, -1);
     const contractSigner = await ethers.getImpersonatedSigner(safe.address);
-    return timelockGuard.connect(contractSigner).checkTransaction(to, value, data, operation, 0, 0, 0, ZeroAddress, ZeroAddress, signatures, safe.address);
+    return timelockGuard.connect(contractSigner).checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, sign, safe.address);
 }
 
 function runTest_quorumExecute(threshold, quorumCancel, quorumExecute, nbOwners) {
   it('Execute a transaction directly with quorumExecute > threshold = ' + threshold, async function () {
-    const { owners, safe, others } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, limitNoTimelock, quorumCancel, quorumExecute]);
+    const { owners, safe, others } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
 
     await owners[0].sendTransaction({to: safe.address, value: 10000});
     assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - before execution");

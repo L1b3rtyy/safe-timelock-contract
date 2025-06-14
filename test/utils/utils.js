@@ -73,8 +73,10 @@ export async function getSafe(nbOwners, threshold, contractName, argFunc) {
   return { owners, safe, masterCopy, others, guard }; 
 }
 
-export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0) {
+export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed) {
   let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation);
+  if(malformed)
+    signatureBytes = signatureBytes.slice(0, -2);
 
   return safe.execTransaction(
     to,

@@ -33,8 +33,9 @@ interface MySafe {
 /// Typically you would have threshold <= quorumCancel < quorumExecute <= nb owners. This is not enforced in the contract
 ///  
 /// Example values for Safe 2/5 (5 owners, 2 signatures required):
-/// - timelockDuration = 604800               // 1 week
-/// - limitNoTimelock = 100000000000000000    // 0.1 ETH
+/// - timelockDuration = 172800               // 2 days
+/// - throttle = 180                          // 3 minutes
+/// - limitNoTimelock = 1                     // 1 ETH
 /// - quorumCancel = 3
 /// - quorumExecute = 4
 ///  
@@ -42,32 +43,34 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.3.3";
+    string public constant VERSION = "1.3.4";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
     uint8 public constant MAX_QUEUE = 100;
 
-    error UnAuthorized(address caller, uint8 reason);
+    enum UNAUTHORIZED_REASONS{SENDER, REINITIALIZE, SIGNATURES, DATA}       // solhint-disable-line contract-name-capwords
+    error UnAuthorized(address caller, UNAUTHORIZED_REASONS reason);
     error ZeroAddress();
-    error InvalidConfig(uint64 timelockDuration);
-    error QueuingNeeded();
-    error QueuingNotNeeded();
+    error InvalidConfig();
+    error Throttled(uint256 timestamp, uint256 lastQueueTime, uint64 throttle);
+    error QueuingNeeded(bytes32 txHash);
+    error QueuingNotNeeded(uint64 timelockDuration, uint128 limitNoTimelock);
     error TimeLockActive(bytes32 txHash);
     error CancelMisMatch(); 
-    error MaxQueue(bytes32 txHash);
+    error MaxQueue();
     function checkSender() private view {
-        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, 0);
+        if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, UNAUTHORIZED_REASONS.SENDER);
     }
 
     /// @dev Any contract that inherits from this contract must call this function
     /// - from its constructor if non upgradable
     /// - from its initialize function if upgradable
     /// We do not put the  keyword 'onlyInitializing' here so that non upgradable contract can inherit from this contract
-    function _initialize(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
-        if(address(safe) != address(0)) revert UnAuthorized(msg.sender, 1);
+    function _initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
+        if(address(safe) != address(0)) revert UnAuthorized(msg.sender, UNAUTHORIZED_REASONS.REINITIALIZE);
         if(address(_safe) == address(0)) revert ZeroAddress();
-        setConfigHelper(timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
         safe = _safe;
     }
 
@@ -81,7 +84,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         uint256 gasPrice,
         address gasToken,
         address payable refundReceiver,
-        bytes memory signatures,
+        bytes calldata signatures,
         address executor ) external {
         checkSender();
         MySafe mySafe = MySafe(safe);
@@ -92,14 +95,14 @@ abstract contract BaseTimelockGuard is BaseGuard {
         }
         // allow skipping the queue for queueTransaction or cancelTransaction
         if (to == address(this)) {
-            if(data.length < 4) revert UnAuthorized(executor, 3);
+            if(data.length < 4) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.DATA);
             bytes4 selector = bytes4(data);
             if (selector == this.queueTransaction.selector)
                 return;
             else if(selector == this.cancelTransaction.selector) {
                 if(quorumCancel == 0)
                     return;
-                if(signatures.length < uint16(quorumCancel)*65) revert UnAuthorized(executor, 2);
+                if(signatures.length < uint16(quorumCancel)*65) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.SIGNATURES);
                 if(quorumCancel > mySafe.getThreshold())
                     checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumCancel);
                 return;
@@ -108,18 +111,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    /// @notice Shallow slice of the signatures array to avoid copying the whole array.
-    /// @dev ⚠️ WARNING: this function overwrites the original `signatures` array and returns a shallow slice.
-    /// The original array MUST NOT be used after calling this - THIS MUST BE VERIFIED FOR ALL NEW VERSIONS OF THE SAFE CONTRACT.
-    function sliceShallow(bytes memory signatures, uint256 start, uint256 end) private pure returns (bytes memory result) {
-        assembly {
-            // Pointer to the start of the slice data
-            result := add(signatures, start)
-            // Write new length just before the data
-            mstore(result, sub(end, start))
-        }
-    }
-    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, uint256 totalQuorum) private view {
+    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
         MySafe mySafe = MySafe(safe);
         bytes32 txHash = mySafe.getTransactionHash(
             // Transaction info
@@ -137,8 +129,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
             mySafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
         // Here we could simply call mySafe.checkNSignatures(txHash, data, signatures, totalQuorum) but we want to save gas by not verifying again the signatures up to the threshold 
         uint256 threshold = mySafe.getThreshold();
-        bytes memory _signatures = sliceShallow(signatures, threshold*65, totalQuorum*65);
-        mySafe.checkNSignatures(txHash, data, _signatures, totalQuorum - threshold);
+        mySafe.checkNSignatures(txHash, data, signatures[threshold*65:totalQuorum*65], totalQuorum - threshold);
     }
     function checkAfterExecution(bytes32 txHash, bool success) external {
         // No action needed here
@@ -147,20 +138,21 @@ abstract contract BaseTimelockGuard is BaseGuard {
     address public safe;
     struct TimelockConfig { 
         uint64 timelockDuration;
-        uint64 throttle;            // TODO: To be removed, only kept to keep the storage slot aligned with the previous version of the contract
+        uint64 throttle;
         uint128 limitNoTimelock;
     }
     TimelockConfig public timelockConfig;
-    uint256 internal lastQueueTime; // TODO: To be removed, only kept to keep the storage slot aligned with the previous version of the contract
+    uint256 internal lastQueueTime;
     event TimelockConfigChanged();  // Empty event to save on gas as we don't need the history. Check the field of timelockConfig for the new values
 
     /// @notice Set the configuration for this timelock and allow clearing hashes that are irrelevant due to the new configuration (this is not verified in the contract) 
     /// @param timelockDuration Duration of timelock, 0 disables the timelock, transactions can be executed directly
+    /// @param throttle Throttle time, 0 disables the throttling. Limit the frequency of queueing.
     /// @param limitNoTimelock Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
     /// @param clearHashes Transaction hashes for which to clear the timelock. Relevant when the config has been changed so no timelock is need for these hashes 
-    function setConfig (uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
+    function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
         checkSender();
-        setConfigHelper(timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
+        setConfigHelper(timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
         uint256 len = clearHashes.length;
         if(len != 0) {
             unchecked {
@@ -171,11 +163,12 @@ abstract contract BaseTimelockGuard is BaseGuard {
         }
         emit TimelockConfigChanged();
     }
-    function setConfigHelper(uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
-        if(timelockDuration > 1209600) revert InvalidConfig(timelockDuration);
+    function setConfigHelper(uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) internal {
+        if(timelockDuration > 1209600 || throttle > 3600) revert InvalidConfig();
         quorumCancel = _quorumCancel;
         quorumExecute = _quorumExecute;
         timelockConfig.timelockDuration = timelockDuration;
+        timelockConfig.throttle = throttle;
         timelockConfig.limitNoTimelock = limitNoTimelock;
     }
     
@@ -186,25 +179,30 @@ abstract contract BaseTimelockGuard is BaseGuard {
         return transactions[txHash];
     }
     // No need to index anything here as the events are not used for querying. The Safe UX already displays all executed transactions.
-    event TransactionQueued(bytes32 txHash); // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
-    event TransactionCanceled();
+    event TransactionQueued(bytes32 indexed txHash);    // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
+    event TransactionCanceled(bytes32 indexed txHash);
     event TransactionCleared(bytes32 txHash);
     event TransactionsCleared();
-    event TransactionExecuted(bytes32 txHash, uint256 timestamp);
+    event TransactionExecuted(bytes32 indexed txHash, uint256 timestamp);
 
     /// @notice Queues a transaction to be executed after the timelock duration.
     function queueTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation) external {
         checkSender();
-        if(noTimelockNeeded(value, data, operation)) revert QueuingNotNeeded();
+        // Yes miners can manipulate block timestamps by up to a few minutes, but to continuously skip the throttle would require time manipulation over each block, unfeasible as the #blocks increases.
+        // An attacker could DoS the contract by continuously queuing transactions when the throttle time is over. But without throttling an attacker could continuously queue transactions consuming the Safe's nonce as soon as available, an even worse DoS.
+        // The attack is anyway remediated by an emergency change of owners using a number of signatures > quorumExecute > threshold, skipping the queue
+        if(block.timestamp < lastQueueTime + timelockConfig.throttle) revert Throttled(block.timestamp, lastQueueTime, timelockConfig.throttle);
+        if(noTimelockNeeded(value, data, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock);
         bytes32 txHash = getTxHash(to, value, data, operation);
 
         uint256[] storage timestamps = transactions[txHash];
-        if(timestamps.length == MAX_QUEUE) revert MaxQueue(txHash);
+        if(timestamps.length == MAX_QUEUE) revert MaxQueue();
+        lastQueueTime = block.timestamp;
         timestamps.push(block.timestamp);
         emit TransactionQueued(txHash);
     }
 
-    /// @notice Cancels a queued transaction identified by its hash and timestamp.
+    /// @notice Cancels a queued transaction identified by its hash and timestamp. Only exact match are cancelled, ow the transaction is reverted.
     /// @dev Several transactions can have the same hash and timestamp, in this case one of the then will be cancelled.
     /// @param txHash The hash of the transaction to cancel
     /// @param timestampPos The position of the timestamp in transactions[txHash]. Used to speed up the search for the timestamp in the array.
@@ -216,11 +214,8 @@ abstract contract BaseTimelockGuard is BaseGuard {
         if(timestampPos >= len) revert CancelMisMatch();
 
         if(timestamps[timestampPos] == timestamp) {
-            if(len == 1)
-                delete transactions[txHash];
-            else
-                shiftAndPop(timestamps, timestampPos);
-            emit TransactionCanceled();
+            shiftAndPop(timestamps, timestampPos);
+            emit TransactionCanceled(txHash);
         }
         else revert CancelMisMatch();        
     }
@@ -274,22 +269,16 @@ abstract contract BaseTimelockGuard is BaseGuard {
         else {
             uint256[] storage timestamps = transactions[txHash];
             uint256 len = timestamps.length;
-            if(len == 0) revert QueuingNeeded();
+            if(len == 0) revert QueuingNeeded(txHash);
             uint256 executeFrom = block.timestamp - timelockConfig.timelockDuration;
             // Yes miners can manipulate block timestamps by up to a few minutes, but a timelock is typically a few days, so this is not an issue
             if(executeFrom < timestamps[0]) revert TimeLockActive(txHash);
             
             // We clear the corresponding value
-            if(len == 1) {
-                emit TransactionExecuted(txHash, timestamps[0]);
-                delete transactions[txHash];
-            }
-            else {
+            unchecked {
                 uint256 i = 1;
-                unchecked {
-                    while(i < len && executeFrom >= timestamps[i])
-                        ++i;
-                }
+                while(i < len && executeFrom >= timestamps[i])
+                    ++i;
                 emit TransactionExecuted(txHash, timestamps[i-1]);
                 shiftAndPop(timestamps, i-1);
             }

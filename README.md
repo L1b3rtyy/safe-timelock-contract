@@ -21,23 +21,67 @@ Main configuration parameters are:
 
 - ```timelockDuration```: duration of the timelock in seconds, 0 disables the timelock
 
+- ```throttle```: duration enforced between queued transaction, 0 disables this feature. This prevents a Safe from being DoS if the owners are compromised, by continuously consuming available nonce. Allows for an emergency change of owner with #signatures = ```quorumExecute``` > threshold. (see parameter below)
+
 - ```limitNoTimelock```: limit in Wei under which a simple transfer is allowed without timelock, 0 disables this feature
 
 - ```quorumCancel```: the number of signatures needed to cancel a queued transaction. Not relevant if equal or under the Safe's threshold
 
 - ```quorumExecute```: the number of signatures needed to execute any transaction directly without timelock. Not relevant if equal or under the Safe's threshold
 
-Typically you would have threshold <= quorumCancel < quorumExecute <= nb owners. This is not enforced in the contract
+Typically you would have ```threshold < quorumCancel <= quorumExecute <= nb owners```. This is not enforced in the contract
 
-Example values for Safe 2/5 (5 owners, 2 signatures required):
+Note: once set, all transactions except queuing and cancelling are subject to a timelock, including changing any of the parameters above or removing/upgrading the guard.
+
+## Use Cases
+
+Example values for Safe 2/5 (5 owners, 2 signatures required)
+
+### Allowing for additional time to review transactions
+
+Get a automated tools and a technical team to review queued transactions and flag suspicious ones to owners
+
 ```
-timelockDuration = 604800               // 1 week
-limitNoTimelock = 100000000000000000    // 0.1 ETH
+timelockDuration = 172800               // 2 days
+throttle = 0                            // Disabled
+limitNoTimelock = 0                     // Disabled
+quorumCancel = 0                        // Disabled
+quorumExecute = 0                       // Disabled
+```
+
+### Adding a layer of security above the Safe
+
+Prevents the Safe from being taken over even if owners are compromised up to the threshold
+
+```
+timelockDuration = 172800               // 2 days
+throttle = 180                          // 3 minutes
+limitNoTimelock = 0                     // Disabled
 quorumCancel = 3
 quorumExecute = 4
 ```
 
-Note: once set, all transactions except queuing and cancelling are subject to a timelock, including changing any of the parameters above or removing/upgrading the guard.
+### Maximizing usability: lower threshold and allowing direct send without timelock 
+
+The Safe's threshold is lowered to 1 but keeping the same security level
+
+```
+timelockDuration = 172800               // 2 days
+throttle = 180                          // 3 minutes
+limitNoTimelock = 1                     // 1 ETH
+quorumCancel = 2
+quorumExecute = 2
+```
+
+### All included
+
+```
+timelockDuration = 172800               // 2 days
+throttle = 180                          // 3 minutes
+limitNoTimelock = 1                     // 1 ETH
+quorumCancel = 3
+quorumExecute = 4
+```
 
 ## Faucets to get Sepolia Test ETH
 
@@ -49,7 +93,8 @@ https://sepolia-faucet.pk910.de/
 
 ## Contract Compilation and Test
 
-Compilation
+### Compilation
+
 ```
 npx hardhat compile
 ```
@@ -180,6 +225,10 @@ No relevant warning lefts
 
 ### [solhint](https://github.com/protofire/solhint)
 
+```
+solhint 'contracts/**/*.sol' 
+```
+
 ## Deployed Implementations for Upgradable Contracts
 
 [Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
@@ -203,7 +252,7 @@ Removed throttle functionality as it
 
 [Version 1.3.0](https://sepolia.etherscan.io/address/0xDB95BdFB38a75764368335ECc137dE19D4705b7F)
 
-- Fully tested the usage of quorumCancel and quorumExecute and the verification of the additional signatures
+- Fully tested the usage of ```quorumCancel``` and ```quorumExecute``` and the verification of the additional signatures
 - Added a field showing the supported Safe' versions  
 
 [Version 1.3.1](https://sepolia.etherscan.io/address/0x05f0ebc08633674b063B1b6b0A0ad6Bffab1a53E)
@@ -221,3 +270,9 @@ Gas optimization:
 - Added mutation testing and static analysis
 - Various small tweaks.
 - Simplification of the cancelTransaction function as transactions must be in order according to the Safe's nonce.
+
+[Version 1.3.4](https://sepolia.etherscan.io/address/0x4Ef5ECd9b73A3d10CD7DEA563E956cfa64c616fe)
+
+- Added back throttle functionality, as without it there is an even worse DoS attack available to an attacker having compromised a Safe: just consume nonce as soon as available.
+- Various simplifications and small tweaks
+- Indexed some events for better searching capability

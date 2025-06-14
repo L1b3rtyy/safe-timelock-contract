@@ -6,7 +6,7 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 
 contract TimelockGuardUpgradeable is BaseTimelockGuard, Initializable {
 
-    function initialize(address _safe, uint64 timelockDuration, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) public initializer {
-        _initialize(_safe, timelockDuration, limitNoTimelock, _quorumCancel, _quorumExecute);
+    function initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) public initializer {
+        _initialize(_safe, timelockDuration, throttle, limitNoTimelock, _quorumCancel, _quorumExecute);
     }
 }

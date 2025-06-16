@@ -676,7 +676,7 @@ describe("End To End", function () {
 
     await expect(
       execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0), 0, true)
-    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.SIGNATURE);
+    ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.SIGNATURES);
   }); 
 })
 async function getEnd2EndCancelData(txHash, position) {

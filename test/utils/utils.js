@@ -73,8 +73,8 @@ export async function getSafe(nbOwners, threshold, contractName, argFunc) {
   return { owners, safe, masterCopy, others, guard }; 
 }
 
-export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed) {
-  let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation);
+export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, notOrder) {
+  let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation, 0, notOrder);
   if(malformed)
     signatureBytes = signatureBytes.slice(0, -2);
 
@@ -92,7 +92,7 @@ export async function execTransaction(wallets, safe, to, value, data = "0x", ope
   );
 };
 
-export async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceincrement = 0) {
+export async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, notOrder) {
   const nonce = parseInt(await safe.nonce());
 
   // Get the transaction hash for the Safe transaction
@@ -106,14 +106,14 @@ export async function getSignatures(wallets, safe, to, value, data = "0x", opera
     0,
     ZeroAddress,
     ZeroAddress,
-    String(nonce + nonceincrement)
+    String(nonce + nonceIncrement)
   );
 
   let signatureBytes = "0x";
   const bytesDataHash = ethers.utils.arrayify(transactionHash);
 
   // Sort the signers by their addresses
-  const sorted = orderWallets([...wallets])
+  const sorted = notOrder ? [...wallets]: orderWallets([...wallets])
 
   // Sign the transaction hash with each signer
   for (let i = 0; i < sorted.length; i++) {

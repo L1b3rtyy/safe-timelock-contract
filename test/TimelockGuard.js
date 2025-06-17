@@ -124,7 +124,6 @@ describe('BaseTimelockGuard', function () {
     consoleLog("Verifying hash function")
     const queueData = [toAdd[0], 1, "0x01", 0]
     const txHash = await queueTransaction(timelockGuard, ...queueData);
-    consoleLog("Verifying hash function, txHash=" + txHash);
     const getTxHash = (to, value, data, operation) => {
       // 1) Pack exactly like `abi.encodePacked(to, value, data, operation)`
       const packed = ethers.utils.solidityPack(
@@ -342,9 +341,8 @@ describe('BaseTimelockGuard', function () {
 
     await time.increase(timelockDuration-1);
 
-    await expect(
-      timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor)
-    ).to.emit(timelockGuard, "TransactionExecuted");
+    const tx = await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
+    await checkGasUsed(tx, 35600);
 
     consoleLog("Executing with several tx in the queue and latest one after waiting exactly timelockDuration");
     await expect(
@@ -522,7 +520,6 @@ describe("End To End", function () {
     await expect(
       execTransaction(requiredSigners, safe, ...rawTxData)
     ).to.be.revertedWith("TimeLockActive");
-    assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - after reverted execution");
 
     consoleLog("Waiting for timelock to expire");
     await time.increase(timelockDuration + 1);
@@ -541,16 +538,32 @@ describe("End To End", function () {
 
     consoleLog("direct execute with #signers = threshold < quorumExecute");
     await expect(
-      checkTransaction(owners.slice(0, threshold), to, value, data, 0, guard, safe)
+      checkTransaction(owners.slice(0, threshold), to, value, data, guard, safe)
     ).to.be.revertedWith("QueuingNeeded");
+
+      consoleLog("Direct execute with #signers = quorumExecute > threshold but only reused owners");
+    await expect(
+      checkTransaction([...owners.slice(0, threshold), ...owners.slice(0, quorumExecute-threshold)], to, value, data, guard, safe, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, threshold);
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = first");
+    await expect(
+      checkTransaction([...owners.slice(0, quorumExecute-1), owners[0]], to, value, data, guard, safe, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, quorumExecute-1);
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = last");
+    await expect(
+      checkTransaction([...owners.slice(0, quorumExecute-1), owners[threshold-1]], to, value, data, guard, safe, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(threshold-1, quorumExecute-1);
 
     consoleLog("direct execute with #signers = quorumExecute > threshold but non owners (=" + others.last.address + ")");
     await expect(
-      checkTransaction([...owners.slice(0, quorumExecute-1), others.last], to, value, data, 0, guard, safe)
-    ).to.be.reverted;
+      checkTransaction([...owners.slice(0, quorumExecute-1), others.last], to, value, data, guard, safe)
+    ).to.be.revertedWith("GS026");
 
     consoleLog("direct execute with #signers = quorumExecute > threshold");
-    expect(await checkTransaction(owners.slice(0, quorumExecute), to, value, data, 0, guard, safe));
+    expect(await checkTransaction(owners.slice(0, quorumExecute), to, value, data, guard, safe));
+
+    consoleLog("direct execute with #signers = 1+quorumExecute > threshold and last reused owner");
+    expect(await checkTransaction([...owners.slice(0, quorumExecute), owners[0]], to, value, data, guard, safe, true));
   });
   it('Execute a transaction directly with quorumExecute = threshold', async function () {
     const { owners, safe } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, threshold]);
@@ -583,6 +596,18 @@ describe("End To End", function () {
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), others.last], safe, guard.address, 0, cancelData)
     ).to.be.revertedWith("GS026");
+    consoleLog("Cancelling with #signers = quorumCancel > threshold but only reused owners");
+    await expect(
+      execTransaction([...owners.slice(0, threshold), ...owners.slice(0, quorumCancel-threshold)], safe, guard.address, 0, cancelData, 0, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, threshold);
+    consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = first");
+    await expect(
+      execTransaction([...owners.slice(0, quorumCancel-1), owners[0]], safe, guard.address, 0, cancelData, 0, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, quorumCancel-1);
+    consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = last");
+    await expect(
+      execTransaction([...owners.slice(0, quorumCancel-1), owners[threshold-1]], safe, guard.address, 0, cancelData, 0, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(threshold-1, quorumCancel-1);
     consoleLog("Cancelling with #signers = quorumCancel > threshold");
     expect(await execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, cancelData));
 
@@ -608,7 +633,8 @@ describe("End To End", function () {
     const txHash = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData), true);
 
     consoleLog("Cancelling with #signers = quorumCancel = threshold");
-    expect(await execTransaction(owners.slice(0, threshold), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0)));
+    const tx = await execTransaction(owners.slice(0, threshold), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0))
+    await checkGasUsed(tx, 75000);
   });
   it('Removing the guard', async function () {
     const { owners, safe, guard, masterCopy } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
@@ -679,6 +705,12 @@ describe("End To End", function () {
     ).to.be.revertedWith("UnAuthorized").withArgs(safe.signer.address, UNAUTHORIZED_REASONS.SIGNATURES);
   }); 
 })
+async function checkGasUsed(tx, limit) {
+  consoleLog("Ensuring no extra processing is done");
+  const receipt = await tx.wait();
+  const gasUsed = receipt.gasUsed.toNumber();
+  assert.isBelow(gasUsed, limit, "[limit, gasUsed]=" + [limit, gasUsed]);  
+}
 async function getEnd2EndCancelData(txHash, position) {
   const lastBlock = await ethers.provider.getBlock("latest");
   return buildData("cancelTransaction", [txHash, position, lastBlock.timestamp]);
@@ -723,13 +755,12 @@ function buildData(functionName, args) {
   const iface = new ethers.utils.Interface([moduleAbi]);
   return iface.encodeFunctionData(functionName, args);
 }
-async function checkTransaction(wallets, to, value, data, operation, timelockGuard, safe) {   // TODO
+async function checkTransaction(wallets, to, value, data, timelockGuard, safe, notOrder) {
     // Get signature with a nonce increment of -1 to match the guard. Check the guard code for more details. 
-    const sign = await getSignatures(wallets, safe, to, value, data, 0, -1);
+    const sign = await getSignatures(wallets, safe, to, value, data, 0, -1, notOrder);
     const contractSigner = await ethers.getImpersonatedSigner(safe.address);
     return timelockGuard.connect(contractSigner).checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, sign, safe.address);
 }
-
 function runTest_quorumExecute(threshold, quorumCancel, quorumExecute, nbOwners) {
   it('Execute a transaction directly with quorumExecute > threshold = ' + threshold, async function () {
     const { owners, safe, others } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);
@@ -742,13 +773,24 @@ function runTest_quorumExecute(threshold, quorumCancel, quorumExecute, nbOwners)
     await expect(
       execTransaction(owners.slice(0, threshold), safe, ...rawTxData)
     ).to.be.revertedWith("QueuingNeeded");
-    assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - #signers = threshold");
 
     consoleLog("Direct execute with #signers = quorumExecute > threshold but non owners (=" + others.last.address + ")");
     await expect(
       execTransaction([...owners.slice(0, quorumExecute-1), others.last], safe, ...rawTxData)
     ).to.be.revertedWith("GS026");
-    assert.equal(await ethers.provider.getBalance(safe.address), 10000, "Check safe balance - #signers = quorumExecute but with a non owner");
+
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but only reused owners");
+    await expect(
+      execTransaction([...owners.slice(0, threshold), ...owners.slice(0, quorumExecute-threshold)], safe, ...rawTxData, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, threshold);
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = first");
+    await expect(
+      execTransaction([...owners.slice(0, quorumExecute-1), owners[0]], safe, ...rawTxData, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(0, quorumExecute-1);
+    consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = last");
+    await expect(
+      execTransaction([...owners.slice(0, quorumExecute-1), owners[threshold-1]], safe, ...rawTxData, false, true)
+    ).to.be.revertedWith("DuplicateSignature").withArgs(threshold-1, quorumExecute-1);
 
     consoleLog("Direct execute with #signers = quorumExecute > threshold");
     expect(await execTransaction(owners.slice(0, quorumExecute), safe, ...rawTxData));

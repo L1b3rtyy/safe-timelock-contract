@@ -43,7 +43,7 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.3.4";
+    string public constant VERSION = "1.4.0";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
@@ -129,7 +129,39 @@ abstract contract BaseTimelockGuard is BaseGuard {
             mySafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
         // Here we could simply call mySafe.checkNSignatures(txHash, data, signatures, totalQuorum) but we want to save gas by not verifying again the signatures up to the threshold 
         uint256 threshold = mySafe.getThreshold();
+        assertNoDupSigs(signatures, threshold, totalQuorum);
         mySafe.checkNSignatures(txHash, data, signatures[threshold*65:totalQuorum*65], totalQuorum - threshold);
+    }
+    error DuplicateSignature(uint256 i, uint256 j);
+
+    /// @dev Reverts if any signature in [0..threshold-1] is byte-for-byte equal to
+    ///      any in [threshold..totalQuorum-1].
+    function assertNoDupSigs(bytes memory signatures, uint256 threshold, uint256 totalQuorum) private pure {
+        // For each “safe” sig index i
+        for (uint256 i = 0; i < threshold; ++i) {
+            // compute base offset in bytes
+            uint256 offA = 32 + i * 65; // 32-byte length prefix + i*65
+            // For each “guard” sig index j
+            for (uint256 j = threshold; j < totalQuorum; ++j) {
+                uint256 offB = 32 + j * 65;
+                bool same;
+                assembly {
+                    // load r (32 bytes) from both slots
+                    let rA := mload(add(signatures, offA))
+                    let rB := mload(add(signatures, offB))
+                    // load s (next 32 bytes)
+                    let sA := mload(add(signatures, add(offA, 32)))
+                    let sB := mload(add(signatures, add(offB, 32)))
+                    // load v (the final byte of the 65-byte chunk)
+                    let vA := byte(0, mload(add(signatures, add(offA, 64))))
+                    let vB := byte(0, mload(add(signatures, add(offB, 64))))
+                    // compare all three pieces
+                    same := and(and(eq(rA, rB), eq(sA, sB)), eq(vA, vB))
+                }
+                if (same)
+                    revert DuplicateSignature(i, j);
+            }
+        }
     }
     function checkAfterExecution(bytes32 txHash, bool success) external {
         // No action needed here

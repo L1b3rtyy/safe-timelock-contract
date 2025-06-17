@@ -276,3 +276,7 @@ Gas optimization:
 - Added back throttle functionality, as without it there is an even worse DoS attack available to an attacker having compromised a Safe: just consume nonce as soon as available.
 - Various simplifications and small tweaks
 - Indexed some events for better searching capability
+
+[Version 1.4.0](https://sepolia.etherscan.io/address/0xaeEB03289310E26Cb6e6F6654AD0Da84C63cC695)
+
+Fixed a vulnerability where owners' signatures could be re-used between the ones submitted to the Safe (indices ```1``` to ```threshold```) and the ones submitted to the Guard (indices ```threshold+1``` to ```quorumCancel``` or ```quorumExecute```).

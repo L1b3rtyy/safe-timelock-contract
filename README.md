@@ -269,7 +269,7 @@ Gas optimization:
 
 - Added mutation testing and static analysis
 - Various small tweaks.
-- Simplification of the cancelTransaction function as transactions must be in order according to the Safe's nonce.
+- Simplification of the ```cancelTransaction``` function as transactions must be in order according to the Safe's nonce.
 
 [Version 1.3.4](https://sepolia.etherscan.io/address/0x4Ef5ECd9b73A3d10CD7DEA563E956cfa64c616fe)
 
@@ -280,3 +280,7 @@ Gas optimization:
 [Version 1.4.0](https://sepolia.etherscan.io/address/0xaeEB03289310E26Cb6e6F6654AD0Da84C63cC695)
 
 Fixed a vulnerability where owners' signatures could be re-used between the ones submitted to the Safe (indices ```1``` to ```threshold```) and the ones submitted to the Guard (indices ```threshold+1``` to ```quorumCancel``` or ```quorumExecute```).
+
+[Version 1.5.0](https://sepolia.etherscan.io/address/0xB6e25E793D80a4F972DdB252821F3c49df7bE91D)
+
+Rollback event changes to maintain compatibility with UI

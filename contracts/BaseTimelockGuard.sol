@@ -43,7 +43,7 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.4.0";
+    string public constant VERSION = "1.5.0";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
@@ -211,11 +211,11 @@ abstract contract BaseTimelockGuard is BaseGuard {
         return transactions[txHash];
     }
     // No need to index anything here as the events are not used for querying. The Safe UX already displays all executed transactions.
-    event TransactionQueued(bytes32 indexed txHash);    // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
-    event TransactionCanceled(bytes32 indexed txHash);
+    event TransactionQueued(bytes32 txHash);    // The details of the queued transaction must be retrieved directly from the transaction itself to save gas
+    event TransactionCanceled();
     event TransactionCleared(bytes32 txHash);
     event TransactionsCleared();
-    event TransactionExecuted(bytes32 indexed txHash, uint256 timestamp);
+    event TransactionExecuted(bytes32 txHash, uint256 timestamp);
 
     /// @notice Queues a transaction to be executed after the timelock duration.
     function queueTransaction(address to, uint256 value, bytes calldata data, Enum.Operation operation) external {
@@ -247,7 +247,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
         if(timestamps[timestampPos] == timestamp) {
             shiftAndPop(timestamps, timestampPos);
-            emit TransactionCanceled(txHash);
+            emit TransactionCanceled();
         }
         else revert CancelMisMatch();        
     }

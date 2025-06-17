@@ -170,7 +170,7 @@ describe('BaseTimelockGuard', function () {
     assert.equal(txs.length, 1, "Queue and cancel - happy case - #=" + txs.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 0, txs[0])
-    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
+    ).to.emit(timelockGuard, "TransactionCanceled");
     const txsAfter = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter.length, 0, "Queue and cancel - happy case - no more timestamp, #=" + txsAfter.length);
 
@@ -181,12 +181,12 @@ describe('BaseTimelockGuard', function () {
     assert.equal(txs2.length, 2, "Queue 2 and cancel - happy case - #=" + txs2.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 1, txs2[1])
-    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
+    ).to.emit(timelockGuard, "TransactionCanceled");
     const txsAfter1 = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter1.length, 1, "Queue 2 and cancel 1 - happy case - #=" + txsAfter1.length);
     await expect(
       timelockGuard.cancelTransaction(hash, 0, txs2[0])
-    ).to.emit(timelockGuard, "TransactionCanceled").withArgs(hash);
+    ).to.emit(timelockGuard, "TransactionCanceled");
     const txsAfter2 = await timelockGuard.getTransactions(hash);
     assert.equal(txsAfter2.length, 0, "Queue 2 and cancel 2 - happy case - #=" + txsAfter2.length);
 

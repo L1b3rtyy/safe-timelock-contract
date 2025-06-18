@@ -73,8 +73,9 @@ export async function getSafe(nbOwners, threshold, contractName, argFunc) {
   return { owners, safe, masterCopy, others, guard }; 
 }
 
-export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, notOrder) {
-  let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation, 0, notOrder);
+export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
+  let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation, 0, orderSection, useEIP712Sign);
+
   if(malformed)
     signatureBytes = signatureBytes.slice(0, -2);
 
@@ -90,9 +91,13 @@ export async function execTransaction(wallets, safe, to, value, data = "0x", ope
     ZeroAddress,
     signatureBytes
   );
-};
+}
 
-export async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, notOrder) {
+export async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, orderSection, useEIP712Sign = []) {
+  if(orderSection === true || orderSection === 0) {
+    console.error("Invalid orderSection=" + orderSection);
+    throw new Error("Invalid orderSection=" + orderSection);
+  }
   const nonce = parseInt(await safe.nonce());
 
   // Get the transaction hash for the Safe transaction
@@ -111,16 +116,54 @@ export async function getSignatures(wallets, safe, to, value, data = "0x", opera
 
   let signatureBytes = "0x";
   const bytesDataHash = ethers.utils.arrayify(transactionHash);
+  const sorted = orderSection ? [...orderWallets(wallets.slice(0, orderSection)), ...orderWallets(wallets.slice(orderSection, wallets.length))] : (orderSection === null ? [...wallets] : orderWallets([...wallets]));
 
-  // Sort the signers by their addresses
-  const sorted = notOrder ? [...wallets]: orderWallets([...wallets])
-
-  // Sign the transaction hash with each signer
   for (let i = 0; i < sorted.length; i++) {
-    const flatSig = (await sorted[i].signMessage(bytesDataHash))
-      .replace(/1b$/, "1f")
-      .replace(/1c$/, "20");
-    signatureBytes += flatSig.slice(2);
+
+    let flatSig;
+    if (!useEIP712Sign.includes(i)) {
+      // Use eth_sign (v > 30)
+      flatSig = (await sorted[i].signMessage(bytesDataHash))
+        .replace(/1b$/, "1f")
+        .replace(/1c$/, "20");
+    } else {
+      // Use EIP-712
+      const wallet = sorted[i];
+      const domain = { verifyingContract: safe.address, chainId: await wallet.getChainId() };
+
+      const types = {
+        SafeTx: [
+          { name: "to", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+          { name: "operation", type: "uint8" },
+          { name: "safeTxGas", type: "uint256" },
+          { name: "baseGas", type: "uint256" },
+          { name: "gasPrice", type: "uint256" },
+          { name: "gasToken", type: "address" },
+          { name: "refundReceiver", type: "address" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+
+      const message = {
+        to,
+        value,
+        data,
+        operation,
+        safeTxGas: 0,
+        baseGas: 0,
+        gasPrice: 0,
+        gasToken: ZeroAddress,
+        refundReceiver: ZeroAddress,
+        nonce: nonce + nonceIncrement,
+      };
+
+      const signature = await wallet._signTypedData(domain, types, message);
+      const { r, s, v } = ethers.utils.splitSignature(signature);
+      flatSig = r + s.slice(2) + ethers.utils.hexlify(v).slice(2); // v is 27 or 28
+    }
+    signatureBytes += flatSig.slice(2); // remove '0x' before concatenating
   }
   return signatureBytes;
 }

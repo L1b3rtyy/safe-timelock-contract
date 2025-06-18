@@ -22,9 +22,9 @@
     "ethereum-waffle": "^4.0.10",
     "ethers": "^5.4.0",
     "ganache-cli": "^6.12.2",
-    "hardhat": "^2.24.0",
+    "hardhat": "^2.24.3",
     "hardhat-dependency-compiler": "^1.2.1",
-    "hardhat-gas-reporter": "^2.2.3",
+    "hardhat-gas-reporter": "^2.3.0",
     "solidity-coverage": "^0.8.16",
     "@morenabarboni/sumo": "^3.2.1"
   },

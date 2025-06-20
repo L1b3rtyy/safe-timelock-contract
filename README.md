@@ -288,3 +288,7 @@ Rollback event changes to maintain compatibility with UI
 [Version 1.5.1](https://sepolia.etherscan.io/address/0x38A3F32916f339DB97e16E9981222413a974A91E)
 
 The fix in v1.4.0 still allowed the same owner to provide several signature with different signature schemes between the ones submitted to the Safe (indices ```1``` to ```threshold```) and the ones submitted to the Guard (indices ```threshold+1``` to ```quorumCancel``` or ```quorumExecute```). This patch prevents it.
+
+[Version 1.5.2](https://sepolia.etherscan.io/address/0x530109D2Af44f94D24032B0430bC2A547D811CEA)
+
+Changed some comments.

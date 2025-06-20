@@ -27,10 +27,11 @@ interface MySafe {
 /// 3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
 /// Main configuration parameters are:
 /// - timelockDuration: duration of the timelock in seconds, 0 disables the timelock
+/// - throttle: duration enforced between queued transaction, 0 disables this feature.
 /// - limitNoTimelock: limit in Wei under which a simple transfer is allowed without timelock, 0 disables this feature
 /// - quorumCancel: the number of signatures needed to cancel a queued transaction. Not relevant if equal or under the Safe's threshold
 /// - quorumExecute: the number of signatures needed to execute any transaction directly without timelock. Not relevant if equal or under the Safe's threshold
-/// Typically you would have threshold <= quorumCancel < quorumExecute <= nb owners. This is not enforced in the contract
+/// Typically you would have threshold < quorumCancel <= quorumExecute <= nb owners. This is not enforced in the contract
 ///  
 /// Example values for Safe 2/5 (5 owners, 2 signatures required):
 /// - timelockDuration = 172800               // 2 days
@@ -43,7 +44,7 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.5.1";
+    string public constant VERSION = "1.5.2";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
@@ -146,9 +147,6 @@ abstract contract BaseTimelockGuard is BaseGuard {
     event TimelockConfigChanged();  // Empty event to save on gas as we don't need the history. Check the field of timelockConfig for the new values
 
     /// @notice Set the configuration for this timelock and allow clearing hashes that are irrelevant due to the new configuration (this is not verified in the contract) 
-    /// @param timelockDuration Duration of timelock, 0 disables the timelock, transactions can be executed directly
-    /// @param throttle Throttle time, 0 disables the throttling. Limit the frequency of queueing.
-    /// @param limitNoTimelock Value under which a direct ETH transfer does not require a timelock and can be executed directly. 0 forces any direct ETH sent to go through the queue when the timelock is active 
     /// @param clearHashes Transaction hashes for which to clear the timelock. Relevant when the config has been changed so no timelock is need for these hashes 
     function setConfig (uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute, bytes32[] calldata clearHashes) external {
         checkSender();
@@ -292,8 +290,6 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
         return keccak256(abi.encodePacked(to, value, data, operation));
     }
-    /// @notice The minimum quorum needed to cancel a queued transaction. 0 or a value below or equal the default Safe threshold means no specific quorum is needed. 
     uint8 public quorumCancel;
-    /// @notice The minimum quorum needed to directly execute a transaction without timelock. 0 de-activates direct execution. A value below or equal the default Safe threshold will allow all transactions to be executed without timelock.
     uint8 public quorumExecute;
 }

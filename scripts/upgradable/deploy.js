@@ -1,9 +1,7 @@
 //@ts-check
-import hardhat from "hardhat";
-const { ethers, upgrades } = hardhat;
-import argumentsArray from '../arguments.js';
-import secrets from '../../secrets.json' assert { type: "json" };
-const { safeAddress } = secrets;
+const { ethers, upgrades } = require("hardhat");
+const argumentsArray = require('../arguments.js');
+const { safeAddress } = require('../../secrets.json');
 
 async function main() {
   const [deployer] = await ethers.getSigners();

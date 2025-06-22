@@ -1,7 +1,6 @@
 //@ts-check
-import hardhat from "hardhat";
-const { ethers } = hardhat;
-import argumentsArray from './arguments.js';
+const { ethers } = require("hardhat");
+const argumentsArray = require('./arguments.js');
 
 async function main() {
   const [deployer] = await ethers.getSigners();

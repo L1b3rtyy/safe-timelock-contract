@@ -1,7 +1,6 @@
-import secrets from '../secrets.json' assert { type: "json" };
-const { safeAddress } = secrets;
+const { safeAddress } = require('../secrets.json');
 
-export default [
+module.exports = [
   safeAddress,
   150,                                          // Minimum delay timer in seconds
   30,                                           // Throttle time in seconds

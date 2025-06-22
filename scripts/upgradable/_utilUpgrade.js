@@ -1,9 +1,7 @@
-import hardhat from "hardhat";
-const { ethers, upgrades } = hardhat;
-import secrets from '../../secrets.json' assert { type: "json" };
-const { proxyAddress } = secrets;
+const { ethers, upgrades } = require("hardhat");
+const { proxyAddress } = require('../../secrets.json');
 
-export async function getUpgradeContract() {
+module.exports.getUpgradeContract = async () =>  {
   const [deployer] = await ethers.getSigners();
   console.log("Force import proxy...");
   // Load the old contract factory

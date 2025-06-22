@@ -132,7 +132,7 @@ npx hardhat test
 ```@morenabarboni/sumo``` is used
 
 To make test execution faster:
-- Disable ```hardhat-gas-reporter``` in ```hardhat.config.cjs``` with
+- Disable ```hardhat-gas-reporter``` in ```hardhat.config.js``` with
 ```javascript
   gasReporter: {
     enabled: false,
@@ -153,8 +153,6 @@ npx sumo test
 ```
 
 Only false positive are left.
-
-Note: due to the project using ESM Javascript modules by default the configuration file has to be renamed ```sumo-config.cjs``` with the ```cjs``` extension. And a few files in the library needs to be updated to import this file instead of the original one. Check the errors on first run. 
 
 ## Contract Deployment and Verification 
 
@@ -180,33 +178,33 @@ The scripts load sensitive data from a file ```secrets.json```. It should contai
 
 Deployment
 ```
-npx hardhat run ./scripts/deploy.js --network sepolia
+npx hardhat run ./scripts/deploy.js --network <network>
 ```
 Verify
 ```
-npx hardhat verify --network sepolia --constructor-args ./scripts/arguments.cjs {{GuardAddress}}
+npx hardhat verify --network <network> --constructor-args ./scripts/arguments.js {{GuardAddress}}
 ```
 
 ### Upgradable
 
 1. The implementation contract is already deployed, you just want to deploy the proxy and proxy admin - best to save gas
 ```
-npx hardhat run ./scripts/upgradable/deployProxy.js --network sepolia
+npx hardhat run ./scripts/upgradable/deployProxy.js --network <network>
 ```
 2. To deploy everything from scratch: implementation, proxy and proxy admin - will cost more
 ```
-npx hardhat run ./scripts/upgradable/deploy.js --network sepolia
+npx hardhat run ./scripts/upgradable/deploy.js --network <network>
 ```
 3. To upgrade an already deployed setup. It will only deploy the new implementation and have the proxy point to it.
 ```
-npx hardhat run ./scripts/upgradable/validateUpgrade.js --network sepolia  // Confirm the upgrade is fine
-npx hardhat run ./scripts/upgradable/prepareUpgrade.js --network sepolia   // Deploy the implementation contract only
+npx hardhat run ./scripts/upgradable/validateUpgrade.js --network <network>  // Confirm the upgrade is fine
+npx hardhat run ./scripts/upgradable/prepareUpgrade.js --network <network>   // Deploy the implementation contract only
 ```
 Note: you will need the old version of the contract to run these, check the scripts
    
 Verify implementation (the proxy and proxy admin are automatically verified)
 ```
-npx hardhat verify --network sepolia {{ImpAddress}}
+npx hardhat verify --network <network> {{ImpAddress}}
 ```
 
 ## Static analysis
@@ -229,7 +227,7 @@ No relevant warning lefts
 solhint 'contracts/**/*.sol' 
 ```
 
-## Deployed Implementations for Upgradable Contracts
+## Deployed Implementations on Sepolia
 
 [Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
 

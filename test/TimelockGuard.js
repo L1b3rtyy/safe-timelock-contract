@@ -1,9 +1,8 @@
-import { expect, assert } from "chai";
-import hardhat from 'hardhat';
-const { ethers } = hardhat;
-import { time } from "@nomicfoundation/hardhat-network-helpers";
-import { execTransaction, getSafe, ZeroAddress, getSignatures } from "./utils/utils.js";
-import CompiledGuard from "../artifacts/contracts/BaseTimelockGuard.sol/BaseTimelockGuard.json" with { type: "json"}
+const { expect, assert } = require("chai");
+const { ethers } = require("hardhat");
+const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { execTransaction, getSafe, ZeroAddress, getSignatures } = require("./utils/utils.js");
+const CompiledGuard = require("../artifacts/contracts/BaseTimelockGuard.sol/BaseTimelockGuard.json");
 
 const consoleLog = () => {};  // Set to console.log to enable
 

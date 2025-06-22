@@ -1,10 +1,9 @@
-import { assert } from "chai";
-import hardhat from "hardhat";
-const { ethers } = hardhat; // ✅ Works with CJS in ESM
+const { assert } = require("chai");
+const { ethers } = require("hardhat");
 
-export const ZeroAddress = "0x0000000000000000000000000000000000000000";
+const ZeroAddress = "0x0000000000000000000000000000000000000000";
 
-export async function getSafe(nbOwners, threshold, contractName, argFunc) {
+async function getSafe(nbOwners, threshold, contractName, argFunc) {
   const accounts = await ethers.getSigners();
   // nbOwners for the owners, plus 1 for the deployer, plus 2 for the first and last that will be non-owners
   assert.isAtLeast(accounts.length, nbOwners + 3, "Not enough accounts available, decrease the number of owners or increase the number of accounts in your test environment");
@@ -73,7 +72,7 @@ export async function getSafe(nbOwners, threshold, contractName, argFunc) {
   return { owners, safe, masterCopy, others, guard }; 
 }
 
-export async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
+async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
   let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation, 0, orderSection, useEIP712Sign);
 
   if(malformed)
@@ -93,7 +92,7 @@ export async function execTransaction(wallets, safe, to, value, data = "0x", ope
   );
 }
 
-export async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, orderSection, useEIP712Sign = []) {
+async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, orderSection, useEIP712Sign = []) {
   if(orderSection === true || orderSection === 0) {
     console.error("Invalid orderSection=" + orderSection);
     throw new Error("Invalid orderSection=" + orderSection);
@@ -170,3 +169,5 @@ export async function getSignatures(wallets, safe, to, value, data = "0x", opera
 function orderWallets(wallets) {
   return wallets.sort((a, b) => a.address.localeCompare(b.address, "en", { sensitivity: "base" }));
 }
+
+module.exports = { ZeroAddress, getSafe, execTransaction, getSignatures};

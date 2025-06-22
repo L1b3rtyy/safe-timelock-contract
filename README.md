@@ -182,7 +182,7 @@ npx hardhat run ./scripts/deploy.js --network <network>
 ```
 Verify
 ```
-npx hardhat verify --network <network> --constructor-args ./scripts/arguments.js {{GuardAddress}}
+npx hardhat verify --network <network> --constructor-args ./scripts/arguments.js <guardAddress>
 ```
 
 ### Upgradable
@@ -204,7 +204,7 @@ Note: you will need the old version of the contract to run these, check the scri
    
 Verify implementation (the proxy and proxy admin are automatically verified)
 ```
-npx hardhat verify --network <network> {{ImpAddress}}
+npx hardhat verify --network <network> <impAddress>
 ```
 
 ## Static analysis

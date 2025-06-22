@@ -20,7 +20,7 @@ interface MySafe {
     ) external view returns (bytes32);
     function checkNSignatures(bytes32 dataHash, bytes memory data, bytes memory signatures, uint256 requiredSignatures) external view;   
 }
-/// @title Safe Timelock Guard 
+/// @title Safe Timelock Guard  
 /// @notice Once in place the SafeTimelock will:
 /// 1. Force 'most' transactions to be queued first for a given time span, before they can be executed
 /// 2. Allow cancelling queued transactions
@@ -49,7 +49,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
     uint8 public constant MAX_QUEUE = 100;
-
+    
     enum UNAUTHORIZED_REASONS{SENDER, REINITIALIZE, SIGNATURES, DATA}       // solhint-disable-line contract-name-capwords
     error UnAuthorized(address caller, UNAUTHORIZED_REASONS reason);
     error ZeroAddress();
@@ -85,7 +85,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         uint256 gasPrice,
         address gasToken,
         address payable refundReceiver,
-        bytes calldata signatures,
+        bytes memory signatures,
         address executor ) external {
         checkSender();
         MySafe mySafe = MySafe(safe);
@@ -112,7 +112,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
+    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, uint256 totalQuorum) private view {
         MySafe mySafe = MySafe(safe);
         bytes32 txHash = mySafe.getTransactionHash(
             // Transaction info
@@ -275,8 +275,8 @@ abstract contract BaseTimelockGuard is BaseGuard {
             // We clear the corresponding value
             unchecked {
                 uint256 i = 1;
-                while(i < len && executeFrom >= timestamps[i])
-                    ++i;
+                    while(i < len && executeFrom >= timestamps[i])
+                        ++i;
                 emit TransactionExecuted(txHash, timestamps[i-1]);
                 shiftAndPop(timestamps, i-1);
             }

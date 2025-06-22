@@ -291,4 +291,5 @@ The fix in v1.4.0 still allowed the same owner to provide several signature with
 
 [Version 1.5.2](https://sepolia.etherscan.io/address/0x530109D2Af44f94D24032B0430bC2A547D811CEA)
 
-Changed some comments.
+- Modified some comments.
+- Changed signatures type from ```callback``` to ```memory```

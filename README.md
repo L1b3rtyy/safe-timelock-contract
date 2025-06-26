@@ -289,5 +289,9 @@ The fix in v1.4.0 still allowed the same owner to provide several signature with
 
 [Version 1.5.2](https://sepolia.etherscan.io/address/0x530109D2Af44f94D24032B0430bC2A547D811CEA)
 
-- Modified some comments.
+Modified some comments.
+
+[Version 1.5.3](https://sepolia.etherscan.io/address/0x986420C1a9D63a1bD0E3B08D91EDe53199a0F53D)
+
 - Changed signatures type from ```callback``` to ```memory```
+- Fix multisend: transactions in the same block were not allowed due to the throttling

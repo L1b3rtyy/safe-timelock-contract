@@ -91,16 +91,21 @@ describe('BaseTimelockGuard', function () {
     ).to.emit(timelockGuard, "TransactionQueued");
     consoleLog("Throttled just after queueing");
     const lastQueueTime = await time.latest();
-    const blockTimestamp = lastQueueTime + 2;
+    const blockTimestamp = lastQueueTime + Math.round(throttle/3);
     await time.setNextBlockTimestamp(blockTimestamp);
     await expect(
       timelockGuard.queueTransaction(toAdd[0], limitNoTimelock+2, "0x", 0)
     ).to.be.revertedWith("Throttled").withArgs(blockTimestamp, lastQueueTime, throttle);
+    await time.increase(throttle);
+    consoleLog("Queueing again");
+    await expect(
+      timelockGuard.queueTransaction(toAdd[0], 10*limitNoTimelock, "0x", 0)
+    ).to.emit(timelockGuard, "TransactionQueued");
     consoleLog("Queueing after exactly the throttle time");
-    await time.increase(throttle-1);
+    await time.setNextBlockTimestamp(await time.latest() + throttle);
     await expect(
       timelockGuard.queueTransaction(toAdd[0], limitNoTimelock+2, "0x", 0)
-    ).to.emit(timelockGuard, "TransactionQueued");
+    ).to.be.revertedWith("Throttled");
 
     await time.increase(throttle);
     consoleLog("QueuingNotNeeded with value lower than the limit");

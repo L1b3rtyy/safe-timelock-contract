@@ -9,7 +9,8 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+    "@morenabarboni/sumo": "^3.2.1",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.13",
     "@nomiclabs/hardhat-ethers": "^2.2.3",
     "@nomiclabs/hardhat-etherscan": "^3.1.8",
     "@nomiclabs/hardhat-waffle": "^2.0.6",
@@ -19,10 +20,9 @@
     "@safe-global/safe-contracts": "^1.4.1-2",
     "chai": "^4.3.7",
     "ethers": "^5.4.0",
-    "hardhat": "^2.24.3",
+    "hardhat": "^2.25.0",
     "hardhat-dependency-compiler": "^1.2.1",
     "hardhat-gas-reporter": "^2.3.0",
-    "solidity-coverage": "^0.8.16",
-    "@morenabarboni/sumo": "^3.2.1"
+    "solidity-coverage": "^0.8.16"
   }
 }

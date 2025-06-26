@@ -20,7 +20,7 @@ interface MySafe {
     ) external view returns (bytes32);
     function checkNSignatures(bytes32 dataHash, bytes memory data, bytes memory signatures, uint256 requiredSignatures) external view;   
 }
-/// @title Safe Timelock Guard  
+/// @title Safe Timelock Guard 
 /// @notice Once in place the SafeTimelock will:
 /// 1. Force 'most' transactions to be queued first for a given time span, before they can be executed
 /// 2. Allow cancelling queued transactions
@@ -44,12 +44,12 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.5.2";
+    string public constant VERSION = "1.5.3";
     string public constant TESTED_SAFE_VERSIONS = "1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
     uint8 public constant MAX_QUEUE = 100;
-    
+
     enum UNAUTHORIZED_REASONS{SENDER, REINITIALIZE, SIGNATURES, DATA}       // solhint-disable-line contract-name-capwords
     error UnAuthorized(address caller, UNAUTHORIZED_REASONS reason);
     error ZeroAddress();
@@ -189,7 +189,8 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Yes miners can manipulate block timestamps by up to a few minutes, but to continuously skip the throttle would require time manipulation over each block, unfeasible as the #blocks increases.
         // An attacker could DoS the contract by continuously queuing transactions when the throttle time is over. But without throttling an attacker could continuously queue transactions consuming the Safe's nonce as soon as available, an even worse DoS.
         // The attack is anyway remediated by an emergency change of owners using a number of signatures > quorumExecute > threshold, skipping the queue
-        if(block.timestamp < lastQueueTime + timelockConfig.throttle) revert Throttled(block.timestamp, lastQueueTime, timelockConfig.throttle);
+        // <= to allow multisend
+        if(block.timestamp <= lastQueueTime + timelockConfig.throttle) revert Throttled(block.timestamp, lastQueueTime, timelockConfig.throttle);
         if(noTimelockNeeded(value, data, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock);
         bytes32 txHash = getTxHash(to, value, data, operation);
 
@@ -275,8 +276,8 @@ abstract contract BaseTimelockGuard is BaseGuard {
             // We clear the corresponding value
             unchecked {
                 uint256 i = 1;
-                    while(i < len && executeFrom >= timestamps[i])
-                        ++i;
+                while(i < len && executeFrom >= timestamps[i])
+                    ++i;
                 emit TransactionExecuted(txHash, timestamps[i-1]);
                 shiftAndPop(timestamps, i-1);
             }

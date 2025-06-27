@@ -47,22 +47,20 @@ describe('TimelockGuard', function () {
 
     const isVersion = str => {
       const parts = str.split(".");
-      if(parts.length != 3)
-        return false;
+      assert.strictEqual(parts.length, 3, "Invalid version (parts.length)=" + str);
       for(let i=0; i < parts.length; i++) {
         const temp = Number.parseInt(parts[i]);
-        if(isNaN(temp) || temp < 0)
-          return false;
+        assert.isFalse(isNaN(temp), "Invalid version (isNaN(temp))=" + str);
+        assert.isAbove(temp, 0, "Invalid version (temp<0)=" + str);
       }
-      return true;
     }
     const version = await timelockGuard.VERSION()
-    assert.isTrue(isVersion(version), "Invalid version=" + version);
+    isVersion(version);
 
     const testedSafeVersion = await timelockGuard.TESTED_SAFE_VERSIONS();
     const parts = testedSafeVersion.split("|");
     for(const part of parts)
-      assert.isTrue(isVersion(part), "Invalid version part=" + part);
+      isVersion(part);
   });
 })
 describe('BaseTimelockGuard', function () { 
@@ -500,7 +498,7 @@ describe('BaseTimelockGuard', function () {
 
     const transactions = await getTransactions(timelockGuard, txHash);
     const latest = await time.latest()
-    assert.isTrue(transactions[1]<latest, "Confirm latest transactions can be executed");
+    assert.isBelow(transactions[1], latest, "Confirm latest transactions can be executed");
 
     await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
   });  

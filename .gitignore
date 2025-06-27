@@ -1,7 +1,6 @@
 node_modules
-.env
 .TODO.txt
-/.openzeppelin
+.openzeppelin
 Cookbook.txt
 .vscode
 sumo
@@ -10,10 +9,6 @@ sumo
 /cache
 /artifacts
 /ignition
-
-# TypeChain files
-/typechain
-/typechain-types
 
 # solidity-coverage files
 /coverage

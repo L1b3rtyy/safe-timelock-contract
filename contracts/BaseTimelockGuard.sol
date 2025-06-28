@@ -44,8 +44,8 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.5.3";
-    string public constant TESTED_SAFE_VERSIONS = "1.4.1";
+    string public constant VERSION = "1.5.4";
+    string public constant TESTED_SAFE_VERSIONS = "1.3.0|1.4.0|1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
     uint8 public constant MAX_QUEUE = 100;

@@ -11,7 +11,7 @@ const { providerURL, deployerWalletPrivateKey, etherscanAPIkey } = require('./se
 module.exports = {
   
   gasReporter: {
-    enabled: true,
+    enabled: false,
     trackGasDeltas: true,
   },
   solidity: {
@@ -43,6 +43,11 @@ module.exports = {
     paths: [
       "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol",
       "@safe-global/safe-contracts/contracts/Safe.sol",
+      // Comment the following lines if you have not cloned the corresponding repositories (see REWADME)
+      "external/safe-1.3.0/contracts/proxies/GnosisSafeProxyFactory.sol",
+      "external/safe-1.3.0/contracts/GnosisSafe.sol",
+      "external/safe-1.4.0/contracts/proxies/SafeProxyFactory.sol",
+      "external/safe-1.4.0/contracts/Safe.sol"
     ],
   },
 };

@@ -3,6 +3,22 @@ const { ethers } = require("hardhat");
 
 const ZeroAddress = "0x0000000000000000000000000000000000000000";
 
+const versionArg = process.env.SAFE_VERSION || "1.4.1";
+console.log("Testing for Safe version: " + versionArg);
+
+let safeFQN, proxyFactoryFQN;
+
+if (versionArg === "1.3.0") {
+  safeFQN = "external/safe-1.3.0/contracts/GnosisSafe.sol:GnosisSafe";
+  proxyFactoryFQN = "external/safe-1.3.0/contracts/proxies/GnosisSafeProxyFactory.sol:GnosisSafeProxyFactory";
+} else if (versionArg === "1.4.0") {
+  safeFQN = "external/safe-1.4.0/contracts/Safe.sol:Safe";
+  proxyFactoryFQN = "external/safe-1.4.0/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+} else {
+  safeFQN = "@safe-global/safe-contracts/contracts/Safe.sol:Safe";
+  proxyFactoryFQN = "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+}
+
 async function getSafe(nbOwners, threshold, contractName, argFunc) {
   const accounts = await ethers.getSigners();
   // nbOwners for the owners, plus 1 for the deployer, plus 2 for the first and last that will be non-owners
@@ -10,11 +26,11 @@ async function getSafe(nbOwners, threshold, contractName, argFunc) {
   // Ensure the accounts are ordered by address so that we control the order of the owners when calling the execTransaction function
   orderWallets(accounts);
   const deployer = accounts[0];
-  const safeFactory = await ethers.getContractFactory("Safe", deployer);
+  const safeFactory = await ethers.getContractFactory(safeFQN, { signer: deployer });
   const masterCopy = await safeFactory.deploy();
 
   const proxyFactory = await (
-    await ethers.getContractFactory("SafeProxyFactory", deployer)
+    await ethers.getContractFactory(proxyFactoryFQN, { signer: deployer })
   ).deploy();
 
   const others = {first: accounts[1], last: accounts[accounts.length-1]};
@@ -56,10 +72,11 @@ async function getSafe(nbOwners, threshold, contractName, argFunc) {
   if(argFunc)
     await guard.initialize(...argFunc(safeAddress));
 
-  const safe = await ethers.getContractAt("Safe", safeAddress);
+  const safe = await ethers.getContractAt(safeFQN, safeAddress);
 
   const testedSafeVersions = await guard.TESTED_SAFE_VERSIONS(); 
   const safeVersion = await safe.VERSION();
+  assert.strictEqual(safeVersion, versionArg, "Safe not as expected version");
   assert.isTrue(testedSafeVersions.includes(safeVersion), "Safe version not tested: [safeVersion, testedSafeVersions]" + [safeVersion, "|" ,testedSafeVersions]);
 
   // Set the guard in the safe

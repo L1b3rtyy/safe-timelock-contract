@@ -99,6 +99,40 @@ https://sepolia-faucet.pk910.de/
 npx hardhat compile
 ```
 
+### Test
+
+In ```hardhat.config.js``` comment the lines referring to other versions of the safe  if you have not cloned these (next section) 
+```
+npx hardhat test
+```
+### Testing against an old version of the Safe (1.3.0 and 1.4.0)
+
+First Git clone each version
+
+```
+mkdir external
+cd external
+
+git clone https://github.com/safe-global/safe-contracts.git safe-1.3.0
+cd safe-1.3.0
+git checkout v1.3.0
+cd ..
+
+git clone https://github.com/safe-global/safe-contracts.git safe-1.4.0
+cd safe-1.4.0
+git checkout v1.4.0
+cd ../..
+```
+And then run
+
+```
+npm run test:safe 1.3.0
+```
+
+```
+npm run test:safe 1.4.0
+```
+
 ### Test coverage
 
 ```solidity-coverage``` is used
@@ -123,6 +157,15 @@ All files                          |      100 |      100 |      100 |      100 |
 
 ```hardhat-gas-reporter``` is used
 
+Enable ```hardhat-gas-reporter``` in ```hardhat.config.js``` with
+```javascript
+  gasReporter: {
+    enabled: true,
+    ...
+  },
+  ...
+```
+
 ```
 npx hardhat test
 ```
@@ -132,14 +175,7 @@ npx hardhat test
 ```@morenabarboni/sumo``` is used
 
 To make test execution faster:
-- Disable ```hardhat-gas-reporter``` in ```hardhat.config.js``` with
-```javascript
-  gasReporter: {
-    enabled: false,
-    ...
-  },
-  ...
-```
+- make sure ```hardhat-gas-reporter``` is disabled (see above)
 - Set ```MAX_QUEUE``` in ```contracts\BaseTimelockGuard.sol``` to a lower value such as ```10```, and update the corresponding test case in ```test\TimelockGuard.js```.
 
 To make sure all tests pass without mutations run
@@ -227,71 +263,6 @@ No relevant warning lefts
 solhint 'contracts/**/*.sol' 
 ```
 
-## Deployed Implementations on Sepolia
+## Latest Deployed Implementations on Sepolia
 
-[Version 1.0.0](https://sepolia.etherscan.io/address/0x1c51eb09730e5f6710b8A4192e54F646058BAD5b)
-
-First upgradable version
-
-[Version 1.1.0](https://sepolia.etherscan.io/address/0x1300Ba2Bd3ab957ec7caa3120d2605951a7E19C4)
-
-Simplified some event's signature to save gas
-
-[Version 1.1.1](https://sepolia.etherscan.io/address/0xe508A96611cfDC1828fDd3ba82c61665B6063A8b)
-
-Moved condition on ```quorumExecute``` to exit ```checkTransaction``` earlier and save gas
-
-[Version 1.2.0](https://sepolia.etherscan.io/address/0x16Be677756C52Cb55E38d1a3661b7060b850edB5)
-
-Removed throttle functionality as it 
-- Uses gas
-- Does not provide clear value
-- Allows for a DOS attack
-
-[Version 1.3.0](https://sepolia.etherscan.io/address/0xDB95BdFB38a75764368335ECc137dE19D4705b7F)
-
-- Fully tested the usage of ```quorumCancel``` and ```quorumExecute``` and the verification of the additional signatures
-- Added a field showing the supported Safe' versions  
-
-[Version 1.3.1](https://sepolia.etherscan.io/address/0x05f0ebc08633674b063B1b6b0A0ad6Bffab1a53E)
-
-Changed field name to describe tested Safe' version and not supported
-
-[Version 1.3.2](https://sepolia.etherscan.io/address/0x37daBc6ebd85f0Ad9D8dB79993b5A1a9027Fb27a)
-
-Gas optimization:
-- Shallow slice signatures before verifying them
-- Convert to assembly ```shiftAndPop```
-
-[Version 1.3.3](https://sepolia.etherscan.io/address/0x326CDb9fEA2A4722988Fa36d97398D6eB8033B6c)
-
-- Added mutation testing and static analysis
-- Various small tweaks.
-- Simplification of the ```cancelTransaction``` function as transactions must be in order according to the Safe's nonce.
-
-[Version 1.3.4](https://sepolia.etherscan.io/address/0x4Ef5ECd9b73A3d10CD7DEA563E956cfa64c616fe)
-
-- Added back throttle functionality, as without it there is an even worse DoS attack available to an attacker having compromised a Safe: just consume nonce as soon as available.
-- Various simplifications and small tweaks
-- Indexed some events for better searching capability
-
-[Version 1.4.0](https://sepolia.etherscan.io/address/0xaeEB03289310E26Cb6e6F6654AD0Da84C63cC695)
-
-Fixed a vulnerability where owners' signatures could be re-used between the ones submitted to the Safe (indices ```1``` to ```threshold```) and the ones submitted to the Guard (indices ```threshold+1``` to ```quorumCancel``` or ```quorumExecute```).
-
-[Version 1.5.0](https://sepolia.etherscan.io/address/0xB6e25E793D80a4F972DdB252821F3c49df7bE91D)
-
-Rollback event changes to maintain compatibility with UI
-
-[Version 1.5.1](https://sepolia.etherscan.io/address/0x38A3F32916f339DB97e16E9981222413a974A91E)
-
-The fix in v1.4.0 still allowed the same owner to provide several signature with different signature schemes between the ones submitted to the Safe (indices ```1``` to ```threshold```) and the ones submitted to the Guard (indices ```threshold+1``` to ```quorumCancel``` or ```quorumExecute```). This patch prevents it.
-
-[Version 1.5.2](https://sepolia.etherscan.io/address/0x530109D2Af44f94D24032B0430bC2A547D811CEA)
-
-Modified some comments.
-
-[Version 1.5.3](https://sepolia.etherscan.io/address/0x986420C1a9D63a1bD0E3B08D91EDe53199a0F53D)
-
-- Changed signatures type from ```callback``` to ```memory```
-- Fix multisend: transactions in the same block were not allowed due to the throttling
+[Version 1.5.4](https://sepolia.etherscan.io/address/0x4B190D94A47579faF5CfC360F5d205B7670D2033)

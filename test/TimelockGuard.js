@@ -51,7 +51,7 @@ describe('TimelockGuard', function () {
       for(let i=0; i < parts.length; i++) {
         const temp = Number.parseInt(parts[i]);
         assert.isFalse(isNaN(temp), "Invalid version (isNaN(temp))=" + str);
-        assert.isAbove(temp, 0, "Invalid version (temp<0)=" + str);
+        assert.isAbove(temp, -1, "Invalid version (temp<0)=" + str);
       }
     }
     const version = await timelockGuard.VERSION()
@@ -344,7 +344,7 @@ describe('BaseTimelockGuard', function () {
     await time.increase(timelockDuration-1);
 
     const tx = await timelockGuard.checkTransaction(to, value, data, 0, 0, 0, 0, ZeroAddress, ZeroAddress, [], executor);
-    await checkGasUsed(tx, 41000);
+    await checkGasUsed(tx, 35600); // Mutation testing addition
 
     consoleLog("Executing with several tx in the queue and latest one after waiting exactly timelockDuration");
     await expect(
@@ -648,7 +648,7 @@ describe("End To End", function () {
 
     consoleLog("Cancelling with #signers = quorumCancel = threshold");
     const tx = await execTransaction(owners.slice(0, threshold), safe, guard.address, 0, await getEnd2EndCancelData(txHash, 0))
-    await checkGasUsed(tx, 88000);
+    await checkGasUsed(tx, 75000); // Mutation testing addition
   });
   it('Removing the guard', async function () {
     const { owners, safe, guard, masterCopy } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, quorumCancel, quorumExecute]);

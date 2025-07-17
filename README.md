@@ -83,14 +83,6 @@ quorumCancel = 3
 quorumExecute = 4
 ```
 
-## Faucets to get Sepolia Test ETH
-
-https://cloud.google.com/application/web3/faucet/ethereum/sepolia
-
-https://docs.metamask.io/developer-tools/faucet/
-
-https://sepolia-faucet.pk910.de/
-
 ## Contract Compilation and Test
 
 ### Compilation
@@ -196,6 +188,14 @@ The deployment scripts will log to the console the deployed contract addresses
 
 (Use ```--network hardhat``` to test first and avoid wasting gas)
 
+By default ```hardhat.config.js``` only contains a section for the sepolia network, add another network as needed.
+
+### Faucets to get Sepolia Test ETH
+
+https://cloud.google.com/application/web3/faucet/ethereum/sepolia
+
+https://sepolia-faucet.pk910.de/
+
 ### Setup ```secrets.json```
 
 The scripts load sensitive data from a file ```secrets.json```. It should contain:
@@ -265,4 +265,4 @@ solhint 'contracts/**/*.sol'
 
 ## Latest Deployed Implementations on Sepolia
 
-[Version 1.5.4](https://sepolia.etherscan.io/address/0x4B190D94A47579faF5CfC360F5d205B7670D2033)
+[Version 1.5.5](https://sepolia.etherscan.io/address/0xC0925928c01bE3603680eA3a0B45F67a94820221)

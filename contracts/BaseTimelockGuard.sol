@@ -44,7 +44,7 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "1.5.4";
+    string public constant VERSION = "1.5.5";
     string public constant TESTED_SAFE_VERSIONS = "1.3.0|1.4.0|1.4.1";
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
@@ -85,7 +85,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         uint256 gasPrice,
         address gasToken,
         address payable refundReceiver,
-        bytes memory signatures,
+        bytes calldata signatures,
         address executor ) external {
         checkSender();
         MySafe mySafe = MySafe(safe);
@@ -112,7 +112,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes memory signatures, uint256 totalQuorum) private view {
+    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
         MySafe mySafe = MySafe(safe);
         bytes32 txHash = mySafe.getTransactionHash(
             // Transaction info
@@ -128,8 +128,15 @@ abstract contract BaseTimelockGuard is BaseGuard {
             refundReceiver,
             // Signature info
             mySafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
-        // We have to re-verify all signatures as there is no easy other way to check whether the additional provided signatures above the threshold are from different owners
-        mySafe.checkNSignatures(txHash, data, signatures, totalQuorum);
+        
+        // We re-verify only the last verified signature. We keep the dynamic part of the signatures at the same place to account for potential contract signatures
+        // See https://docs.safe.global/advanced/smart-account-signatures#examples
+        uint256 start = mySafe.getThreshold() - 1;
+        mySafe.checkNSignatures(txHash, data,
+            abi.encodePacked(
+                signatures[start * 65: totalQuorum * 65],   // First signature to reverify to ensure there are no duplicate owners + additional signatures to verify
+                signatures[(totalQuorum - start) * 65: ]),  // Keep the dynamic part at the same place
+            totalQuorum - start);
     }
 
     function checkAfterExecution(bytes32 txHash, bool success) external {

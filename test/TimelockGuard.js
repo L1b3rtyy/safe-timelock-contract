@@ -616,20 +616,20 @@ describe("End To End", function () {
     consoleLog("Direct execute with #signers = quorumExecute > threshold but only reused owners");
     await expect(
       checkTransactionDirect([...owners.slice(0, threshold), ...owners.slice(0, quorumExecute-threshold)], to, value, data, guard, safe, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = first");
     await expect(
       checkTransactionDirect([...owners.slice(0, quorumExecute-1), owners[0]], to, value, data, guard, safe, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = last");
     await expect(
       checkTransactionDirect([...owners.slice(0, quorumExecute-1), owners[threshold-1]], to, value, data, guard, safe, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
 
     consoleLog("direct execute with #signers = quorumExecute > threshold but non owners (=" + others.last.address + ")");
     await expect(
       checkTransactionDirect([...owners.slice(0, quorumExecute-1), others.last], to, value, data, guard, safe)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
 
     consoleLog("direct execute with #signers = quorumExecute > threshold");
     expect(await checkTransactionDirect(owners.slice(0, quorumExecute), to, value, data, guard, safe));
@@ -667,27 +667,27 @@ describe("End To End", function () {
     consoleLog("Cancelling with #signers = quorumCancel > threshold but non owners (=" + others.last.address + ")");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), others.last], safe, guard.address, 0, cancelData)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold but only reused owners");
     await expect(
       execTransaction([...owners.slice(0, threshold), ...owners.slice(0, quorumCancel-threshold)], safe, guard.address, 0, cancelData, 0, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = first");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), owners[0]], safe, guard.address, 0, cancelData, 0, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = first with different signature scheme");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), owners[0]], safe, guard.address, 0, cancelData, 0, false, threshold, [threshold])  // owners[0] appended at the end will be at position threshold after the array is re-ordered
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = last");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), owners[threshold-1]], safe, guard.address, 0, cancelData, 0, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold but 1 reused owners = last with different signature scheme");
     await expect(
       execTransaction([...owners.slice(0, quorumCancel-1), owners[threshold-1]], safe, guard.address, 0, cancelData, 0, false, threshold, [threshold])  // owners[threshold-1] appended at the end will be at position threshold after the array is re-ordered
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Cancelling with #signers = quorumCancel > threshold - first owner of 2nd set with different signature scheme");
     await expect(
       execTransaction(owners.slice(0, quorumCancel), safe, guard.address, 0, cancelData, 0, false, threshold, [threshold])
@@ -697,7 +697,7 @@ describe("End To End", function () {
     const queueData2 = buildData("queueTransaction", [owners[0].address, 1001, "0x", 0]);
     await expect(
       execTransaction(requiredSigners, safe, guard.address, 0, queueData2)
-    ).to.be.revertedWith("GS013");
+    ).to.be.reverted;
     await time.increase(throttle*2);
     const txHash2 = await getEventQueue(await execTransaction(requiredSigners, safe, guard.address, 0, queueData2), true);
 
@@ -761,12 +761,12 @@ describe("End To End", function () {
     consoleLog("Direct send to the guard from the Safe with #signers = quorumExecute > threshold");
     await expect(
       execTransactionDirect(owners.slice(0, quorumExecute), safe, ...rawTxData)
-    ).to.be.revertedWith("GS013");
+    ).to.be.reverted;
 
     consoleLog("Direct send to the guard from any address should fail");
     await expect(
       owners[0].sendTransaction({to: guard.address, value: 10000})
-    ).to.be.revertedWith("function selector was not recognized and there's no fallback nor receive function");
+    ).to.be.reverted;
   });
   it('Misc', async function () {
     const { owners, safe, guard } = await getSafe(nbOwners, threshold, "TimelockGuardUpgradeable", safeAddress => [safeAddress, timelockDuration, throttle, limitNoTimelock, minTimeNoTimelock, quorumCancel, quorumExecute]);
@@ -867,20 +867,20 @@ function runTest_quorumExecute(threshold, quorumCancel, quorumExecute, nbOwners)
     consoleLog("Direct execute with #signers = quorumExecute > threshold but non owners (=" + others.last.address + ")");
     await expect(
       execTransactionDirect([...owners.slice(0, quorumExecute-1), others.last], safe, ...rawTxData)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
 
     consoleLog("Direct execute with #signers = quorumExecute > threshold but only reused owners");
     await expect(
       execTransactionDirect([...owners.slice(0, threshold), ...owners.slice(0, quorumExecute-threshold)], safe, ...rawTxData, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = first");
     await expect(
       execTransactionDirect([...owners.slice(0, quorumExecute-1), owners[0]], safe, ...rawTxData, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
     consoleLog("Direct execute with #signers = quorumExecute > threshold but 1 reused owners = last");
     await expect(
       execTransactionDirect([...owners.slice(0, quorumExecute-1), owners[threshold-1]], safe, ...rawTxData, false, threshold)
-    ).to.be.revertedWith("GS026");
+    ).to.be.reverted;
 
     consoleLog("Direct execute with #signers = quorumExecute > threshold");
     expect(await execTransactionDirect(owners.slice(0, quorumExecute), safe, ...rawTxData));

@@ -11,16 +11,27 @@ const { providerURL, deployerWalletPrivateKey, etherscanAPIkey } = require('./se
 module.exports = {
   
   gasReporter: {
-    enabled: false,
+    enabled: process.env.GAS_REPORTER ? true : false,
     trackGasDeltas: true,
   },
   solidity: {
     version: "0.8.28",
     settings: {
-      optimizer: {
-        enabled: true,
-        runs: 1000,
-      }
+      optimizer: process.env.SOLIDITY_COVERAGE ?
+        {
+          enabled: true,
+          runs: 1000,
+          details: {
+            yul: true,
+            yulDetails: {
+              optimizerSteps: ""
+            }
+          }
+        } :
+        {
+          enabled: true,
+          runs: 1000
+        }
     }
   },
   paths: {

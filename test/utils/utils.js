@@ -89,11 +89,13 @@ async function getSafe(nbOwners, threshold, contractName, argFunc) {
   return { owners, safe, masterCopy, others, guard }; 
 }
 
-async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
+async function _execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = [], direct) {
   let signatureBytes = await getSignatures(wallets, safe, to, value, data, operation, 0, orderSection, useEIP712Sign);
 
   if(malformed)
     signatureBytes = signatureBytes.slice(0, -2);
+  if(direct)
+    signatureBytes = ethers.utils.hexConcat([signatureBytes, ethers.utils.id("TimelockGuard.direct")]);
 
   return safe.execTransaction(
     to,
@@ -107,6 +109,12 @@ async function execTransaction(wallets, safe, to, value, data = "0x", operation 
     ZeroAddress,
     signatureBytes
   );
+}
+async function execTransaction(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
+  return _execTransaction(wallets, safe, to, value, data, operation, malformed, orderSection, useEIP712Sign);
+}
+async function execTransactionDirect(wallets, safe, to, value, data = "0x", operation = 0, malformed, orderSection, useEIP712Sign = []) {
+  return _execTransaction(wallets, safe, to, value, data, operation, malformed, orderSection, useEIP712Sign, true);
 }
 
 async function getSignatures(wallets, safe, to, value, data = "0x", operation = 0, nonceIncrement = 0, orderSection, useEIP712Sign = []) {
@@ -187,4 +195,4 @@ function orderWallets(wallets) {
   return wallets.sort((a, b) => a.address.localeCompare(b.address, "en", { sensitivity: "base" }));
 }
 
-module.exports = { ZeroAddress, getSafe, execTransaction, getSignatures};
+module.exports = { ZeroAddress, getSafe, execTransaction, execTransactionDirect, getSignatures};

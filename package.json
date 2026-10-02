@@ -1,8 +1,11 @@
 {
   "name": "safe-timelock",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "scripts": {
-    "test:safe": "node scripts/test-version.js"
+    "test:safe": "node scripts/test-version.js",
+    "test": "hardhat test",
+    "testGas": "cross-env GAS_REPORTER=true hardhat test",
+    "testCoverage": "cross-env SOLIDITY_COVERAGE=true hardhat coverage"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,7 @@
     "@openzeppelin/hardhat-upgrades": "^1.28.0",
     "@safe-global/safe-contracts": "^1.4.1-2",
     "chai": "^4.3.7",
+    "cross-env": "^7.0.3",
     "ethers": "^5.4.0",
     "hardhat": "^2.25.0",
     "hardhat-dependency-compiler": "^1.2.1",

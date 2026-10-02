@@ -14,22 +14,25 @@ More details on building a Guard: [Building a Guard for Safe Smart Account](http
 
 Once in place the SafeTimelock will:
 1. Force 'most' transactions to be queued first for a given time span, before they can be executed
-2. Allow cancelling queued transactions
-3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
+2. Allow cancelling queued transactions, potentially with a higher quorum
+3. Allow bypassing the timelock for small simple transfers 
+4. Allow bypassing the timelock ofr any transaction with a higher quorum
 
 Main configuration parameters are:
 
-- ```timelockDuration```: duration of the timelock in seconds, 0 disables the timelock
+- ```timelockDuration```: duration of the timelock in seconds, 0 disables the timelock.
 
-- ```throttle```: duration enforced between queued transaction, 0 disables this feature. This prevents a Safe from being DoS if the owners are compromised, by continuously consuming available nonce. Allows for an emergency change of owner with ```#signatures = quorumExecute > threshold```. (See ```quorumExecute``` below)
+- ```throttle```: duration enforced between queued transaction, 0 disables this feature. This prevents a Safe from being DoS if the owners are compromised, by continuously consuming available nonce. Allows for an emergency change of owner with ```#signatures = quorumExecute > threshold```. (See ```quorumExecute``` below).
 
 - ```limitNoTimelock```: limit in Wei under which a simple transfer is allowed without timelock, 0 disables this feature
 
-- ```quorumCancel```: the number of signatures needed to cancel a queued transaction. Not relevant if equal or under the Safe's threshold
+- ```minTimeNoTimelock```: duration enforced between simple transfers without timelock. This prevents a Safe from being drained by micro transactions.
 
-- ```quorumExecute```: the number of signatures needed to execute any transaction directly without timelock. Not relevant if equal or under the Safe's threshold
+- ```quorumCancel```: the number of signatures needed to cancel a queued transaction. Not relevant if equal or under the Safe's threshold.
 
-Typically you would have ```threshold < quorumCancel <= quorumExecute <= nb owners```. This is not enforced in the contract
+- ```quorumExecute```: the number of signatures needed to execute any transaction directly without timelock. Not relevant if equal or under the Safe's threshold.
+
+Typically you would have ```threshold < quorumCancel <= quorumExecute <= nb owners```. ```quorumCancel <= quorumExecute``` is enforced in the contract.
 
 Note: once set, all transactions except queuing and cancelling are subject to a timelock, including changing any of the parameters above or removing/upgrading the guard.
 
@@ -45,11 +48,12 @@ Get a automated tools and a technical team to review queued transactions and fla
 timelockDuration = 172800               // 2 days
 throttle = 0                            // Disabled
 limitNoTimelock = 0                     // Disabled
+minTimeNoTimelock = 0                   // Disabled
 quorumCancel = 0                        // Disabled
 quorumExecute = 0                       // Disabled
 ```
 
-### Adding a layer of security above the Safe
+### Adding a layer of security above the standard threshold
 
 Prevents the Safe from being taken over even if owners are compromised up to the threshold
 
@@ -57,6 +61,7 @@ Prevents the Safe from being taken over even if owners are compromised up to the
 timelockDuration = 172800               // 2 days
 throttle = 180                          // 3 minutes
 limitNoTimelock = 0                     // Disabled
+minTimeNoTimelock = 0                   // Disabled
 quorumCancel = 3
 quorumExecute = 4
 ```
@@ -66,9 +71,10 @@ quorumExecute = 4
 The Safe's threshold is lowered to 1 but keeping the same security level
 
 ```
-timelockDuration = 172800               // 2 days
-throttle = 180                          // 3 minutes
-limitNoTimelock = 1                     // 1 ETH
+timelockDuration = 172800                     // 2 days
+throttle = 180                                // 3 minutes
+limitNoTimelock = 1,000,000,000,000,000,000   // 1 ETH
+minTimeNoTimelock = 600                       // 10 minutes
 quorumCancel = 2
 quorumExecute = 2
 ```
@@ -76,9 +82,10 @@ quorumExecute = 2
 ### All included
 
 ```
-timelockDuration = 172800               // 2 days
-throttle = 180                          // 3 minutes
-limitNoTimelock = 1                     // 1 ETH
+timelockDuration = 172800                     // 2 days
+throttle = 180                                // 3 minutes
+limitNoTimelock = 1,000,000,000,000,000,000   // 1 ETH
+minTimeNoTimelock = 600                       // 10 minutes
 quorumCancel = 3
 quorumExecute = 4
 ```
@@ -130,7 +137,7 @@ npm run test:safe 1.4.0
 ```solidity-coverage``` is used
 
 ```
-npx hardhat coverage
+npm run testCoverage
 ```
 
 ```
@@ -149,17 +156,8 @@ All files                          |      100 |      100 |      100 |      100 |
 
 ```hardhat-gas-reporter``` is used
 
-Enable ```hardhat-gas-reporter``` in ```hardhat.config.js``` with
-```javascript
-  gasReporter: {
-    enabled: true,
-    ...
-  },
-  ...
 ```
-
-```
-npx hardhat test
+npm run testGas
 ```
 
 ### Mutation Testing

@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
-import "hardhat/console.sol";
 interface MySafe {
     function getThreshold() external view returns (uint256);
     function nonce() external view returns (uint256);

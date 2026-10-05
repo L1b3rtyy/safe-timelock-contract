@@ -4,8 +4,6 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 const { execTransaction, execTransactionDirect, getSafe, ZeroAddress, getSignatures } = require("./utils/utils.js");
 const CompiledGuard = require("../artifacts/contracts/BaseTimelockGuard.sol/BaseTimelockGuard.json");
 
-console.log("Running coverage: " + !!process.env.SOLIDITY_COVERAGE);
-
 const consoleLog = () => {};  // Set to console.log to enable
 
 const toRoot = "0x000000000000000000000000000000000000000";

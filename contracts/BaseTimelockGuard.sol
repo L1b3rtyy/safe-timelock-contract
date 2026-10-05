@@ -104,7 +104,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
 
         // If the submitter wants to execute the transaction directly, we verify the additional signatures
         if(signatures.length >= uint16(quorumExecute)*65 && quorumExecute > _mySafe().getThreshold() && wantsDirect(signatures)) {
-            checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumExecute);
+            checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver, signatures, quorumExecute);
             return;
         }
         // allows skipping the queue for queueTransaction or cancelTransaction, but only for direct calls
@@ -119,14 +119,14 @@ abstract contract BaseTimelockGuard is BaseGuard {
                 // Cheap test to confirm there are enough headers in the signatures. The checkNSignatures will revert if the signatures are not valid anyway
                 if(signatures.length < uint16(quorumCancel)*65) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.SIGNATURES);
                 if(quorumCancel > _mySafe().getThreshold())
-                    checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, gasToken, refundReceiver, signatures, quorumCancel);
+                    checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver, signatures, quorumCancel);
                 return;
             }
         }
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
+    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
         MySafe mySafe = _mySafe();
         bytes memory encodedData = mySafe.encodeTransactionData(
             // Transaction info
@@ -138,7 +138,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
             safeTxGas,
             baseGas,
             gasPrice,
-            gasToken,
+            address(0),
             refundReceiver,
             // Signature info
             mySafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard

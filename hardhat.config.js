@@ -15,7 +15,7 @@ module.exports = {
     trackGasDeltas: true,
   },
   solidity: {
-    version: "0.8.28",
+    version: "0.8.37",
     settings: {
       optimizer: process.env.SOLIDITY_COVERAGE ?
         {

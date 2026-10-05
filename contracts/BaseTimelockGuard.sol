@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.37;
 
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
@@ -50,7 +50,7 @@ interface MySafe {
 abstract contract BaseTimelockGuard is BaseGuard {
 
     // Use string for readability
-    string public constant VERSION = "2.0.0";
+    string public constant VERSION = "2.0.1";
     string public constant TESTED_SAFE_VERSIONS = "1.3.0|1.4.0|1.4.1";
     bytes32 private constant DIRECT_MODE = keccak256("TimelockGuard.direct");
 

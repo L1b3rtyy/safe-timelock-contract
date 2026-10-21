@@ -1,31 +1,38 @@
 const { assert } = require("chai");
 const { ethers } = require("hardhat");
+const fs = require('fs');
 
 const ZeroAddress = "0x0000000000000000000000000000000000000000";
 
-const versionArg = process.env.SAFE_VERSION || "1.4.1";
-console.log("Testing for Safe version: " + versionArg);
-
-let safeFQN, proxyFactoryFQN;
-
-if (versionArg === "1.3.0") {
-  safeFQN = "external/safe-1.3.0/contracts/GnosisSafe.sol:GnosisSafe";
-  proxyFactoryFQN = "external/safe-1.3.0/contracts/proxies/GnosisSafeProxyFactory.sol:GnosisSafeProxyFactory";
-} else if (versionArg === "1.4.0") {
-  safeFQN = "external/safe-1.4.0/contracts/Safe.sol:Safe";
-  proxyFactoryFQN = "external/safe-1.4.0/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
-} else {
-  safeFQN = "@safe-global/safe-contracts/contracts/Safe.sol:Safe";
-  proxyFactoryFQN = "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+function checkSafeVersion(version) {
+  return version === "1.4.1" || fs.existsSync(`external/safe-${version}`);
+}
+function getSafeContractsFQN(version) {
+  let safeFQN, proxyFactoryFQN;
+  if (version === "1.3.0") {
+    safeFQN = "external/safe-1.3.0/contracts/GnosisSafe.sol:GnosisSafe";
+    proxyFactoryFQN = "external/safe-1.3.0/contracts/proxies/GnosisSafeProxyFactory.sol:GnosisSafeProxyFactory";
+  } else if (version === "1.4.0") {
+    safeFQN = "external/safe-1.4.0/contracts/Safe.sol:Safe";
+    proxyFactoryFQN = "external/safe-1.4.0/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+  } else if (version === "1.5.0") {
+    safeFQN = "external/safe-1.5.0/contracts/Safe.sol:Safe";
+    proxyFactoryFQN = "external/safe-1.5.0/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+  } else {
+    safeFQN = "@safe-global/safe-contracts/contracts/Safe.sol:Safe";
+    proxyFactoryFQN = "@safe-global/safe-contracts/contracts/proxies/SafeProxyFactory.sol:SafeProxyFactory";
+  }
+  return {safeFQN, proxyFactoryFQN};
 }
 
-async function getSafe(nbOwners, threshold, contractName, argFunc) {
+async function getSafe(safeVersion, nbOwners, threshold, contractName, argFunc) {
   const accounts = await ethers.getSigners();
   // nbOwners for the owners, plus 1 for the deployer, plus 2 for the first and last that will be non-owners
   assert.isAtLeast(accounts.length, nbOwners + 3, "Not enough accounts available, decrease the number of owners or increase the number of accounts in your test environment");
   // Ensure the accounts are ordered by address so that we control the order of the owners when calling the execTransaction function
   orderWallets(accounts);
   const deployer = accounts[0];
+  const {safeFQN, proxyFactoryFQN} = getSafeContractsFQN(safeVersion);
   const safeFactory = await ethers.getContractFactory(safeFQN, { signer: deployer });
   const masterCopy = await safeFactory.deploy();
 
@@ -65,18 +72,16 @@ async function getSafe(nbOwners, threshold, contractName, argFunc) {
   if (safeAddress === ZeroAddress)
     throw new Error("Safe address not found");
 
-  // Deploy the NoDelegatecallGuard contract
+  // Deploy the contract
   const Guard = await ethers.getContractFactory(contractName, deployer)
-  const guard = await Guard.deploy();
+  const guard = await Guard.deploy(...argFunc(safeAddress));
   await guard.deployed();
-  if(argFunc)
-    await guard.initialize(...argFunc(safeAddress));
 
   const safe = await ethers.getContractAt(safeFQN, safeAddress);
 
   const testedSafeVersions = await guard.TESTED_SAFE_VERSIONS(); 
-  const safeVersion = await safe.VERSION();
-  assert.strictEqual(safeVersion, versionArg, "Safe not as expected version");
+  const _safeVersion = await safe.VERSION();
+  assert.strictEqual(_safeVersion, safeVersion, "Safe not as expected version");
   assert.isTrue(testedSafeVersions.includes(safeVersion), "Safe version not tested: [safeVersion, testedSafeVersions]" + [safeVersion, "|" ,testedSafeVersions]);
 
   // Set the guard in the safe
@@ -195,4 +200,4 @@ function orderWallets(wallets) {
   return wallets.sort((a, b) => a.address.localeCompare(b.address, "en", { sensitivity: "base" }));
 }
 
-module.exports = { ZeroAddress, getSafe, execTransaction, execTransactionDirect, getSignatures};
+module.exports = { ZeroAddress, checkSafeVersion, getSafe, execTransaction, execTransactionDirect, getSignatures};

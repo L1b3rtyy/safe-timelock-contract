@@ -58,7 +58,9 @@ module.exports = {
       "external/safe-1.3.0/contracts/proxies/GnosisSafeProxyFactory.sol",
       "external/safe-1.3.0/contracts/GnosisSafe.sol",
       "external/safe-1.4.0/contracts/proxies/SafeProxyFactory.sol",
-      "external/safe-1.4.0/contracts/Safe.sol"
+      "external/safe-1.4.0/contracts/Safe.sol",
+      "external/safe-1.5.0/contracts/proxies/SafeProxyFactory.sol",
+      "external/safe-1.5.0/contracts/Safe.sol"
     ],
   },
 };

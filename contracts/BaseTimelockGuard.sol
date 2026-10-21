@@ -4,8 +4,21 @@ pragma solidity ^0.8.37;
 import { BaseGuard } from "@safe-global/safe-contracts/contracts/base/GuardManager.sol";
 import { Enum } from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 interface MySafe {
+    function VERSION() external view returns (string memory);
     function getThreshold() external view returns (uint256);
     function nonce() external view returns (uint256);
+    function getTransactionHash(
+        address to,
+        uint256 value,
+        bytes calldata data,
+        Enum.Operation operation,
+        uint256 safeTxGas,
+        uint256 baseGas,
+        uint256 gasPrice,
+        address gasToken,
+        address refundReceiver,
+        uint256 nonce
+    ) external view returns (bytes32);
     function encodeTransactionData(
         address to,
         uint256 value,
@@ -19,14 +32,17 @@ interface MySafe {
         uint256 nonce
     ) external view returns (bytes memory);
     function checkNSignatures(bytes32 dataHash, bytes memory data, bytes memory signatures, uint256 requiredSignatures) external view;   
+    function checkNSignatures(address executor, bytes32 dataHash, bytes memory signatures, uint256 requiredSignatures) external view;
 }
 /// @title Safe Timelock Guard 
 /// @notice Once in place the SafeTimelock will:
 /// 1. Force 'most' transactions to be queued first for a given time span, before they can be executed
 /// 2. Allow cancelling queued transactions
 /// 3. Allow bypassing the timelock for transactions matching some pre-configured conditions 
-/// Direct execution and cancellation do not support Safe’s pre-validated signature type (v = 1), including the sender shortcut.
-/// Signers must supply signatures that remain valid when the guard asks Safe to verify them again.
+/// 
+/// Enhanced direct execution and cancellation re-check the boundary signer and the additional signatures beyond the Safe's normal threshold.
+/// - Safe 1.5.0 supports approved-hash signatures and the original executor shortcut.
+/// - Safe 1.3.0/1.4.0/1.4.1 require approveHash for any v=1 signature re-checked here, the original executor shortcut alone is insufficient on those versions.
 ///
 /// Main configuration parameters are:
 /// - timelockDuration: duration of the timelock in seconds, 0 disables the timelock
@@ -46,12 +62,23 @@ interface MySafe {
 /// - quorumCancel = 3
 /// - quorumExecute = 4
 ///  
-///  Note: once set, all transactions except queuing and cancelling are subject to a timelock, including changing any of the parameters above or removing the guard. Adding a module is also subject to a timelock even if using the module allows bypassing it.
+/// Note: once set, all transactions except queuing and cancelling are subject to a timelock, including changing any of the parameters above or removing the guard. Adding a module is also subject to a timelock even if using the module allows bypassing it.
+/// We assume that the guard is NOT set as an owner of the Safe, as this would allow an enhanced quorum transaction to get one signature free by using the v=1 signature scheme in versions below 1.4.1
 abstract contract BaseTimelockGuard is BaseGuard {
+    struct SafeTransaction {
+        address to;
+        uint256 value;
+        bytes data;
+        Enum.Operation operation;
+        uint256 safeTxGas;
+        uint256 baseGas;
+        uint256 gasPrice;
+        address refundReceiver;
+    }
 
     // Use string for readability
-    string public constant VERSION = "2.0.1";
-    string public constant TESTED_SAFE_VERSIONS = "1.3.0|1.4.0|1.4.1";
+    string public constant VERSION = "2.1.2";
+    string public constant TESTED_SAFE_VERSIONS = "1.3.0|1.4.0|1.4.1|1.5.0";
     bytes32 private constant DIRECT_MODE = keccak256("TimelockGuard.direct");
 
     /// @notice Maximum number of queued transactions per hash. This is a limit to avoid excessive gas usage in the queue
@@ -71,7 +98,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
     error Failed();
     modifier onlySafe() {
         if(msg.sender != address(safe)) revert UnAuthorized(msg.sender, UNAUTHORIZED_REASONS.SENDER);
-        _;
+        _;  // Gas optimization
     }
     function _mySafe() private view returns (MySafe) {
         return MySafe(safe);
@@ -99,61 +126,73 @@ abstract contract BaseTimelockGuard is BaseGuard {
         bytes calldata signatures,
         address executor ) external onlySafe {
         // Prevents immediate reimbursement abuses but only allows partial reimbursement in ETH
-        if(baseGas > 50000 || gasToken != address(0))
-            revert ReimbursementAbuse(baseGas, gasToken);
+        if(baseGas > 50000 || gasToken != address(0))   revert ReimbursementAbuse(baseGas, gasToken);
 
         // If the submitter wants to execute the transaction directly, we verify the additional signatures
-        if(signatures.length >= uint16(quorumExecute)*65 && quorumExecute > _mySafe().getThreshold() && wantsDirect(signatures)) {
-            checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver, signatures, quorumExecute);
+        if(signatures.length >= uint16(quorumExecute)*65 && wantsDirect(signatures) && quorumExecute > _mySafe().getThreshold()) {
+            checkNSignatures(SafeTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver), signatures, quorumExecute, executor);
             return;
         }
         // allows skipping the queue for queueTransaction or cancelTransaction, but only for direct calls
         if (to == address(this) && operation == Enum.Operation.Call) {
             if(data.length < 4) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.DATA);
             bytes4 selector = bytes4(data);
-            if (selector == this.queueTransaction.selector)
-                return;
-            else if(selector == this.cancelTransaction.selector) {
-                if(quorumCancel == 0)
-                    return;
-                // Cheap test to confirm there are enough headers in the signatures. The checkNSignatures will revert if the signatures are not valid anyway
-                if(signatures.length < uint16(quorumCancel)*65) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.SIGNATURES);
-                if(quorumCancel > _mySafe().getThreshold())
-                    checkNSignatures(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver, signatures, quorumCancel);
+            if (selector == this.queueTransaction.selector || selector == this.cancelTransaction.selector) {
+                // Prevents immediate reimbursement abuses for direct execution
+                if(baseGas > 0) revert ReimbursementAbuse(baseGas, gasToken);
+                if(selector == this.cancelTransaction.selector && quorumCancel > 0) {
+                    // Cheap test to confirm there are enough headers in the signatures. The checkNSignatures will revert if the signatures are not valid anyway
+                    if(signatures.length < uint16(quorumCancel)*65) revert UnAuthorized(executor, UNAUTHORIZED_REASONS.SIGNATURES);
+                    if(quorumCancel > _mySafe().getThreshold())
+                        checkNSignatures(SafeTransaction(to, value, data, operation, safeTxGas, baseGas, gasPrice, refundReceiver), signatures, quorumCancel, executor);
+                }
                 return;
             }
         }
         // Proceed to mark as executed if the transaction was queued and meets the timelock condition
         validateAndMarkExecuted (to, value, data, operation);
     }
-    function checkNSignatures(address to, uint256 value, bytes memory data, Enum.Operation operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address payable refundReceiver, bytes calldata signatures, uint256 totalQuorum) private view {
+    function checkNSignatures(SafeTransaction memory transaction, bytes calldata signatures, uint256 totalQuorum, address executor) private view {
         MySafe mySafe = _mySafe();
-        bytes memory encodedData = mySafe.encodeTransactionData(
-            // Transaction info
-            to,
-            value,
-            data,
-            operation,
-            // Payment info
-            safeTxGas,
-            baseGas,
-            gasPrice,
-            address(0),
-            refundReceiver,
-            // Signature info
-            mySafe.nonce()-1);   // Because it was incremented by the Safe before calling this guard
-        
-        // We re-verify only the last verified signature. We keep the dynamic part of the signatures at the same place to account for potential contract signatures
-        // See https://docs.safe.global/advanced/smart-account-signatures#examples
+        // Both supported generations increment nonce before calling the transaction guard.
+        uint256 txNonce = mySafe.nonce() - 1;
         uint256 start = mySafe.getThreshold() - 1;
-        mySafe.checkNSignatures(keccak256(encodedData), encodedData,
-            abi.encodePacked(
-                signatures[start * 65: totalQuorum * 65],   // First signature to reverify to ensure there are no duplicate owners + additional signatures to verify
-                signatures[(totalQuorum - start) * 65: ]),  // Keep the dynamic part at the same place
-            totalQuorum - start);
+        uint256 requiredSignatures = totalQuorum - start;
+        bytes memory modifiedSignatures = abi.encodePacked(
+            signatures[start * 65: totalQuorum * 65],
+            signatures[requiredSignatures * 65:]
+        );
+
+        // Safe already checked its normal threshold. Re-check its last signer as the
+        // ordering boundary, then check the additional signers. The second slice keeps
+        // trailing bytes at their original absolute offsets for contract signatures.
+        if (_usesExecutorSignatures(mySafe)) {
+            bytes32 txHash = _getSafeTransactionHash(mySafe, transaction, txNonce);
+            mySafe.checkNSignatures(executor, txHash, modifiedSignatures, requiredSignatures);
+            return;
+        }
+
+        // Older Safes validate contract owners with isValidSignature(bytes,bytes).
+        // They require the exact transaction preimage, not empty bytes.
+        bytes memory encodedData = _encodeSafeTransactionData(mySafe, transaction, txNonce);
+        mySafe.checkNSignatures(keccak256(encodedData), encodedData, modifiedSignatures, requiredSignatures);
     }
 
-    function checkAfterExecution(bytes32 txHash, bool success) external {
+    /// Use these helper function to avoid compilation errors du to filling the stack
+    function _getSafeTransactionHash(MySafe mySafe, SafeTransaction memory transaction, uint256 txNonce) private view returns (bytes32) {
+        return mySafe.getTransactionHash(
+            transaction.to, transaction.value, transaction.data, transaction.operation,
+            transaction.safeTxGas, transaction.baseGas, transaction.gasPrice,
+            address(0), transaction.refundReceiver, txNonce);
+    }
+    function _encodeSafeTransactionData(MySafe mySafe, SafeTransaction memory transaction, uint256 txNonce) private view returns (bytes memory) {
+        return mySafe.encodeTransactionData(
+            transaction.to, transaction.value, transaction.data, transaction.operation,
+            transaction.safeTxGas, transaction.baseGas, transaction.gasPrice,
+            address(0), transaction.refundReceiver, txNonce);
+    }
+
+    function checkAfterExecution(bytes32 txHash, bool success) external pure override{
         // Prevents reimbursement on failed executions. Also restores the transaction queue
         if(!success) revert Failed();
     }
@@ -168,6 +207,13 @@ abstract contract BaseTimelockGuard is BaseGuard {
         return tail == DIRECT_MODE;
     }
 
+    /// @dev Read the live Safe version so a supported singleton migration does not leave
+    /// a cached signature mode behind. Never treat signature failure as version detection.
+    /// This adds no storage fields to the upgradeable guard.
+    function _usesExecutorSignatures(MySafe mySafe) private view returns (bool) {
+        return (keccak256(bytes(mySafe.VERSION())) == keccak256("1.5.0"));
+    }
+
     address public safe;
     struct TimelockConfig { 
         uint64 timelockDuration;
@@ -177,7 +223,6 @@ abstract contract BaseTimelockGuard is BaseGuard {
     }
     TimelockConfig public timelockConfig;
     uint256 internal lastQueueTime;
-    uint256 internal lastNoTimelock;
     event TimelockConfigChanged();  // Empty event to save on gas as we don't need the history. Check the field of timelockConfig for the new values
 
     /// @notice Set the configuration for this timelock and allow clearing hashes that are irrelevant due to the new configuration (this is not verified in the contract) 
@@ -224,7 +269,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
         // The attack is anyway remediated by an emergency change of owners using a number of signatures > quorumExecute > threshold, skipping the queue
         // < to allow multisend
         if(block.timestamp < lastQueueTime + timelockConfig.throttle) revert Throttled(block.timestamp, lastQueueTime, timelockConfig.throttle);
-        if(noTimelockNeeded(to, value, data, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock, timelockConfig.minTimeNoTimelock);
+        if(noTimelockNeeded(to, value, data.length, operation)) revert QueuingNotNeeded(timelockConfig.timelockDuration, timelockConfig.limitNoTimelock, timelockConfig.minTimeNoTimelock);
         bytes32 txHash = getTxHash(to, value, data, operation);
 
         uint256[] storage timestamps = transactions[txHash];
@@ -290,7 +335,7 @@ abstract contract BaseTimelockGuard is BaseGuard {
     /// @notice Clear a transaction from the queue and mark it as executed. Reverts if the transaction is not queued or if the timelock is still active.
     function validateAndMarkExecuted (address to, uint256 value, bytes memory data, Enum.Operation operation) private {
         bytes32 txHash = getTxHash(to, value, data, operation);
-        if(noTimelockNeeded(to, value, data, operation)) {
+        if(noTimelockNeeded(to, value, data.length, operation)) {
             lastNoTimelock = block.timestamp;
             // If it was queued anyway (for instance if timelockDuration == 0 now and was > 0 before), remove it from storage
             if(transactions[txHash].length != 0) {
@@ -308,17 +353,23 @@ abstract contract BaseTimelockGuard is BaseGuard {
             
             // We clear the corresponding value
             unchecked {
-                uint256 i = 1;
-                while(i < len && executeFrom >= timestamps[i])
-                    ++i;
+                uint256 i;
+                if (executeFrom >= timestamps[len - 1])
+                    i = len;
+                else {
+                    i = 1;
+                    while (i < len && executeFrom >= timestamps[i])
+                        ++i;
+                }
+
                 emit TransactionExecuted(txHash, timestamps[i-1]);
                 shiftAndPop(timestamps, i-1);
             }
         }
     }
-    function noTimelockNeeded(address to, uint256 value, bytes memory data, Enum.Operation operation) private view returns (bool) {
+    function noTimelockNeeded(address to, uint256 value, uint256 dataLength, Enum.Operation operation) private view returns (bool) {
         // We want simple ETH transfers smaller than limitNoTimelock to not require a timelock, but only once minTimeNoTimelock has passed
-        return timelockConfig.timelockDuration == 0 || (to.code.length == 0 && operation == Enum.Operation.Call && data.length == 0 && timelockConfig.limitNoTimelock >= value && block.timestamp > lastNoTimelock + timelockConfig.minTimeNoTimelock );
+        return timelockConfig.timelockDuration == 0 || (value != 0 && operation == Enum.Operation.Call && dataLength == 0 && timelockConfig.limitNoTimelock >= value && block.timestamp > lastNoTimelock + timelockConfig.minTimeNoTimelock && to.code.length == 0);
     }
     function getTxHash(address to, uint256 value, bytes memory data, Enum.Operation operation) private pure returns (bytes32) {
         // Only data has a dynamic type so abi.encodePacked can be used and will save some gas compared to abi.encode  
@@ -326,4 +377,5 @@ abstract contract BaseTimelockGuard is BaseGuard {
     }
     uint8 public quorumCancel;
     uint8 public quorumExecute;
+    uint256 internal lastNoTimelock;
 }

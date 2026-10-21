@@ -102,7 +102,7 @@ npx hardhat compile
 
 In ```hardhat.config.js``` comment the lines referring to other versions of the safe  if you have not cloned these (next section) 
 ```
-npx hardhat test
+npm run test141
 ```
 ### Testing against an old version of the Safe (1.3.0 and 1.4.0)
 
@@ -120,16 +120,28 @@ cd ..
 git clone https://github.com/safe-global/safe-contracts.git safe-1.4.0
 cd safe-1.4.0
 git checkout v1.4.0
+cd ..
+
+git clone https://github.com/safe-global/safe-contracts.git safe-1.5.0
+cd safe-1.5.0
+git checkout v1.5.0
 cd ../..
 ```
-And then run
+Uncomment the corresponding lines in ```hardhat.config.js``` and then to test all versions at once
 
 ```
-npm run test:safe 1.3.0
+npm run test
 ```
+To test each version separately
 
 ```
-npm run test:safe 1.4.0
+npm run test130
+```
+```
+npm run test140
+```
+```
+npm run test150
 ```
 
 ### Test coverage
@@ -151,6 +163,8 @@ File                               |  % Stmts | % Branch |  % Funcs |  % Lines |
 -----------------------------------|----------|----------|----------|----------|----------------|
 All files                          |      100 |      100 |      100 |      100 |                |
 ```
+
+For full coverage you will need to test against v1.5.0
 
 ### Gas usage
 
@@ -241,26 +255,10 @@ Verify implementation (the proxy and proxy admin are automatically verified)
 npx hardhat verify --network <network> <impAddress>
 ```
 
-## Static analysis
+## Audit
 
-### LLM
-
-This contract has seen some back and force with chatGPT and Claude to fix obvious issues
-
-### [Slither](https://github.com/crytic/slither)
-
-```
-py -m slither .\contracts\BaseTimelockGuard.sol --solc-remaps @safe-global=node_modules/@safe-global
-```
-
-No relevant warning lefts
-
-### [solhint](https://github.com/protofire/solhint)
-
-```
-solhint 'contracts/**/*.sol' 
-```
+This contract has been audited using chatGPT 6.1 Sol High
 
 ## Latest Deployed Implementations on Sepolia
 
-[Version 1.5.5](https://sepolia.etherscan.io/address/0xC0925928c01bE3603680eA3a0B45F67a94820221)
+[Version 2.1.2](https://sepolia.etherscan.io/address/0xA9c029D492947ee32961E574c98912f7bb57F197)

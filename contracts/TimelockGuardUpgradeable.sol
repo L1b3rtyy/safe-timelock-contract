@@ -11,4 +11,8 @@ contract TimelockGuardUpgradeable is BaseTimelockGuard, Initializable {
     function initialize(address _safe, uint64 timelockDuration, uint64 throttle, uint128 limitNoTimelock, uint64 minTimeNoTimelock, uint8 _quorumCancel, uint8 _quorumExecute) public initializer {
         _initialize(_safe, timelockDuration, throttle, limitNoTimelock, minTimeNoTimelock, _quorumCancel, _quorumExecute);
     }
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 }
